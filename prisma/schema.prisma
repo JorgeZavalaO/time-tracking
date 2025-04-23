@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  //output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccessStatus {
+  ON_TIME
+  LATE
+}
+
+enum ScheduleType {
+  GENERAL
+  SPECIAL
+}
+
+model User {
+  id                   Int                @id @default(autoincrement())
+  email                String             @unique
+  password             String
+  name                 String?
+  role                 String             @default("admin") // admin / employee / etc.
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  // Relaciones
+  recordedAccesses     Access[]           @relation("UserRecordedAccesses")
+  scheduleChanges      ScheduleHistory[]  @relation("UserScheduleChanges")
+  createdJustifications Justification[]   @relation("UserCreatedJustifications")
+  notifications        Notification[]
+}
+
+model Collaborator {
+  id                  Int         @id @default(autoincrement())
+  dni                 String      @unique
+  name                String
+  active              Boolean     @default(true)
+  scheduleSpecial     Schedule?   @relation("SpecialFor", fields: [scheduleSpecialId], references: [id])
+  scheduleSpecialId   Int?
+  accesses            Access[]
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+}
+
+model Access {
+  id                 Int             @id @default(autoincrement())
+  collaborator       Collaborator    @relation(fields: [collaboratorId], references: [id])
+  collaboratorId     Int
+  timestamp          DateTime        @default(now())
+  status             AccessStatus
+  recordedBy         User?          @relation("UserRecordedAccesses", fields: [recordedById], references: [id])
+  recordedById       Int?
+
+  // Justificación opcional
+  justification       Justification?
+}
+
+model Justification {
+  id             Int       @id @default(autoincrement())
+  reason         String
+  access         Access    @relation(fields: [accessId], references: [id])
+  accessId       Int       @unique
+  createdBy      User     @relation("UserCreatedJustifications", fields: [createdById], references: [id])
+  createdById    Int
+  createdAt      DateTime  @default(now())
+}
+
+model Schedule {
+  id              Int               @id @default(autoincrement())
+  type            ScheduleType
+  days            String            // e.g. "Mon-Fri", "Sat"
+  startTime       String            // e.g. "08:30"
+  specialFor      Collaborator[]    @relation("SpecialFor")
+  history         ScheduleHistory[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model ScheduleHistory {
+  id            Int        @id @default(autoincrement())
+  schedule      Schedule   @relation(fields: [scheduleId], references: [id])
+  scheduleId    Int
+  changedBy     User      @relation("UserScheduleChanges", fields: [changedById], references: [id])
+  changedById   Int
+  oldStartTime  String
+  newStartTime  String
+  changedAt     DateTime   @default(now())
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  admin       User     @relation(fields: [adminId], references: [id])
+  adminId     Int
+  message     String
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
