@@ -5,6 +5,8 @@ import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { CornerDownLeft, LogIn } from "lucide-react"
+import Link from "next/link"
 
 export default function SingInPage() {
     const [email, setEmail] = useState("")
@@ -28,10 +30,10 @@ export default function SingInPage() {
             else alert(res?.error ?? "Error de autenticacion")
     }
     return (
-        <div className="flex item-center justify-center mnin-h-screen bg-gray-100">
+        <div className="flex item-center justify-center">
             <form 
                 onSubmit={handleSubmit}
-                className="bg-card rounded-lg shadow-md w-full maz-w-sm p-6 space-y-4"
+                className="bg-card rounded-lg shadow-lg p-6 w-full max-w-md space-y-4"
             >
                 <h1 className="text-2xl font-semibold text-center">Iniciar sesión</h1>
                 <label className="block space-y-1">
@@ -61,8 +63,13 @@ export default function SingInPage() {
                     className="w-full"
                     disabled={loading}
                 >
+                    <LogIn />
                     {loading?"Entrando..." : "Entrar"}
                 </Button>
+                <Link href="/" className="flex text-sm gap-2 items-center text-center"> 
+                    <CornerDownLeft size={16} strokeWidth={1} />
+                    <span>Regresar a la pagina de inicio</span>
+                </Link>
             </form>
         </div>
     )
