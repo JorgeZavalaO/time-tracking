@@ -1,6 +1,9 @@
 "use client"
 import { Button } from "@/components/ui/button";
-import { LogIn } from "lucide-react";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Clock7, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function Home(){
@@ -22,9 +25,27 @@ export default function Home(){
           <h2 className="text-2xl font-bold mb-4">Control de entrada</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg">Sistema moderno para el registro de entrada de empleados al almacén, gestión de tardanzas y generación de informes.</p>
         </section>
+        <div>
+          <Card className="max-w-md mx-auto mb-12">
+            <CardHeader className="text-center">
+              <CardTitle>Registro de Entrada</CardTitle>
+              <CardDescription>Registre su entrada al almacen</CardDescription>
+            </CardHeader>
+            <CardContent>
+            <div className="space-y-4">
+              <Label htmlFor="dni">DNI</Label>
+              <Input id="DNI" placeholder="Ingrese su DNI (12346578)" />
+            </div>
+            </CardContent>
+            <CardFooter >
+              
+              <Button className="w-full"><Clock7/>Registra entrada ahora</Button>
+            </CardFooter>
+          </Card>
+        </div>
       </main>
-      <footer>
-        soy el footer
+      <footer className="text-center bg-muted py-4">
+        <p>© {new Date().getFullYear()} Sistema de Control de Entrada. Todos los derechos reservados.</p>
       </footer>
     </div>
 
