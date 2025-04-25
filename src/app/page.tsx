@@ -5,10 +5,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Clock7, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import dayjs from "dayjs";
+import { toast } from "sonner"
+
 
 export default function Home(){
   const router = useRouter();
-  
+  const[loading, setLoading] = useState(false)
+  const [dni, setDni] = useState("")
+
+  async function handleRegister() {
+    setLoading(true)
+    const res = await fetch("/api/access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json"},
+      body: JSON.stringify({dni}),
+      })
+
+    setLoading(false)
+
+    const data = await res.json()
+    if(!res.ok) {
+      toast.error(data.message)
+      return
+    }
+
+    const hora = dayjs(data.timestamp).format("HH:mm:ss")
+    toast.success(
+      data.status === "ON_TIME"
+        ? `Entrada registrada ${hora} (puntual)`
+        : `Tardanza registrada ${hora}`
+    )
+    setDni("")
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="bg-white border-b">
@@ -34,12 +65,24 @@ export default function Home(){
             <CardContent>
             <div className="space-y-4">
               <Label htmlFor="dni">DNI</Label>
-              <Input id="DNI" placeholder="Ingrese su DNI (12346578)" />
+              <Input 
+                id="DNI"
+                value={dni}
+                placeholder="Ingrese su DNI (12346578)" 
+                maxLength={8}
+                onChange={(e) => setDni(e.target.value.replace(/\D/g,""))}
+              />
             </div>
             </CardContent>
             <CardFooter >
-              
-              <Button className="w-full"><Clock7/>Registra entrada ahora</Button>
+              <Button 
+                className="w-full"
+                disabled={loading || dni.length !== 8}
+                onClick={handleRegister}
+              >
+                <Clock7/>
+                {loading ? "Registrando…" : "Registra entrada ahora"}
+              </Button>
             </CardFooter>
           </Card>
         </div>

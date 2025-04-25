@@ -10,8 +10,8 @@ import Link from "next/link"
 
 export default function SingInPage() {
     const [email, setEmail] = useState("")
-    const  [password, setPassword] = useState("")
-    const[loading, setLoading] = useState(false)
+    const [password, setPassword] = useState("")
+    const [loading, setLoading] = useState(false)
     const router = useRouter() // para redireccion despues de iniciar sesion
 
     const handleSubmit = async (e: React.FormEvent) => {
