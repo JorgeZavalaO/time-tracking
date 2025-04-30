@@ -12,7 +12,7 @@ export default function EmpleadosPage() {
   const refresh = ()=> setPage(p=>p) // trigger refetch
 
   return (
-    <div className="space-y-6">
+    <div className="W-full flex flex-col gap-4 space-y-6">
       <header className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Colaboradores</h1>
         <CollaboratorForm onSave={refresh} />

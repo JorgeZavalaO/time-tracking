@@ -23,7 +23,7 @@ export default async function ProtectedLayout({
     <>
       <SidebarProvider defaultOpen={true}>
         <AppSidebar />
-        <main className="ml-[--sidebar-width] p-4">
+        <main className=" flex flex-col w-full p-4">
           <SidebarTrigger className="md:hidden fixed top-4 left-4 z-50" />
           {children}
         </main>
