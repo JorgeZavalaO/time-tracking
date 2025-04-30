@@ -14,9 +14,11 @@ export default function Home(){
   const router = useRouter();
   const[loading, setLoading] = useState(false)
   const [dni, setDni] = useState("")
+  const [error, setError] = useState("")
 
   async function handleRegister() {
     setLoading(true)
+    setError("")
     const res = await fetch("/api/access", {
       method: "POST",
       headers: { "Content-Type": "application/json"},
@@ -27,7 +29,8 @@ export default function Home(){
 
     const data = await res.json()
     if(!res.ok) {
-      toast.error(data.message)
+      setError(data.message|| "Ocurrió un error desconocido")
+      toast.error(data.message|| "Ocurrió un error desconocido")
       return
     }
 
@@ -35,7 +38,7 @@ export default function Home(){
     toast.success(
       data.status === "ON_TIME"
         ? `Entrada registrada ${hora} (puntual)`
-        : `Tardanza registrada ${hora}`
+        : `Entrada registrada ${hora} (tardanza)`
     )
     setDni("")
   }
@@ -65,13 +68,17 @@ export default function Home(){
             <CardContent>
             <div className="space-y-4">
               <Label htmlFor="dni">DNI</Label>
-              <Input 
+              <Input
+                autoFocus 
                 id="DNI"
                 value={dni}
                 placeholder="Ingrese su DNI (12346578)" 
                 maxLength={8}
-                onChange={(e) => setDni(e.target.value.replace(/\D/g,""))}
-              />
+                onChange={(e) => {
+                  setDni(e.target.value.replace(/\D/g,""))
+                  if (error) setError("")
+                  }}
+              />{error && (<p className="mt-1 text-sm text-destructive">{error}</p>)}
             </div>
             </CardContent>
             <CardFooter >
@@ -80,8 +87,11 @@ export default function Home(){
                 disabled={loading || dni.length !== 8}
                 onClick={handleRegister}
               >
-                <Clock7/>
-                {loading ? "Registrando…" : "Registra entrada ahora"}
+                {loading
+                  ? <Clock7 className="animate-spin mr-2" />
+                  : <Clock7 className="mr-2" />
+                }
+                {loading ? "Registrando…" : "Registrar entrada ahora"}
               </Button>
             </CardFooter>
           </Card>

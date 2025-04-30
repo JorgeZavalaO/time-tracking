@@ -77,7 +77,7 @@ export default async function handler(req: NextRequest) {
 
     // respuesta de la API
     return NextResponse.json(
-        {status, timeStamp: access.timestamp},
+        {status, timestamp: access.timestamp},
         {status: 200}
     )
 }
