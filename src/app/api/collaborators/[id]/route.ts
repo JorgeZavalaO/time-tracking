@@ -16,7 +16,7 @@ function toValidInt(value: string): number | null {
 }
 
 // PUT ▸ Actualizar un colaborador
-export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+export async function PUT(req: NextRequest, context) {
   try {
     // 1. Validar el ID recibido en la URL 
     const id = toValidInt(context.params.id);
@@ -79,7 +79,7 @@ export async function PUT(req: NextRequest, context: { params: { id: string } })
 
 
 // DELETE ▸ Eliminar un colaborador 
-export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, context) {
   try {
     // 1. Validar el ID 
     const id = toValidInt(context.params.id);
