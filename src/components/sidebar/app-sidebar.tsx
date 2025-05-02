@@ -1,6 +1,6 @@
 "use client"
 
-import { Calendar, Home, UserRound, Search, Settings, ChevronDown } from "lucide-react"
+import { Calendar, Home, UserRound, Search, Settings } from "lucide-react"
 
 import Link from "next/link"
 
@@ -17,7 +17,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
+// import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
 import { NavUser } from "./nav-user"
 
 // Menu items.
