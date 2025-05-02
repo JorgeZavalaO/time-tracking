@@ -15,6 +15,8 @@ function toValidInt(value: string): number | null {
   return Number.isInteger(num) && num > 0 ? num : null;
 }
 
+
+// @ts-expect-error Next.js App Router context type
 // PUT ▸ Actualizar un colaborador
 export async function PUT(req: NextRequest, context) {
   try {
@@ -77,7 +79,7 @@ export async function PUT(req: NextRequest, context) {
   }
 }
 
-
+// @ts-expect-error Next.js App Router context type
 // DELETE ▸ Eliminar un colaborador 
 export async function DELETE(req: NextRequest, context) {
   try {
