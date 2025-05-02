@@ -18,7 +18,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             email:{ label: "Email", type: "email"},
             password:{ label: "password", type: "password"},
         },
-        async authorize(creds): Promise<any>{
+        async authorize(creds): Promise<{ id: string; email: string; name: string } | null> {
             const { email, password } = creds as Credentials;
             if (!email || !password) throw new Error("Credenciales inválidas");
     
@@ -29,7 +29,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const ok = await compare(password, user.password);
             if (!ok) throw new Error("Credenciales inválidas");
     
-            return { id: user.id.toString(), email: user.email, name: user.name };
+            return { id: user.id.toString(), email: user.email, name: user.name ?? "" };
           },
     }),
   ],
