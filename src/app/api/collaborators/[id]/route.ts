@@ -16,12 +16,10 @@ function toValidInt(value: string): number | null {
 }
 
 // PUT ▸ Actualizar un colaborador
-export async function PUT(req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
   try {
     // 1. Validar el ID recibido en la URL 
-    const id = toValidInt(params.id);
+    const id = toValidInt(context.params.id);
     if (id === null) {
       return NextResponse.json(
         { message: "ID inválido: debe ser un entero positivo" },
@@ -81,12 +79,10 @@ export async function PUT(req: NextRequest,
 
 
 // DELETE ▸ Eliminar un colaborador 
-export async function DELETE(req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, context: { params: { id: string } }) {
   try {
     // 1. Validar el ID 
-    const id = toValidInt(params.id);
+    const id = toValidInt(context.params.id);
     if (id === null) {
       return NextResponse.json(
         { message: "ID inválido: debe ser un entero positivo" },
