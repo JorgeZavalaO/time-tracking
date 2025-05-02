@@ -4,17 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"           
 
-// const badId = () => NextResponse.json(
-//     { error:"ID inválido" },
-//     { status:422 }
-// )
-
 // Utilidad pequeña para convertir string → número y validar
 function toValidInt(value: string): number | null {
   const num = Number(value);
   return Number.isInteger(num) && num > 0 ? num : null;
 }
-
 
 // @ts-expect-error Next.js App Router context type
 // PUT ▸ Actualizar un colaborador
