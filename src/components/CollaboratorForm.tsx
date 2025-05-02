@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useSchedules } from "@/hooks/useSchedules"
 import { Schedule } from "@/hooks/useCollaborators"
+import { useSaveCollaborator } from "@/hooks/useCollaboratorMutations"
 
 export function CollaboratorForm({
   onSave,
@@ -27,7 +28,8 @@ export function CollaboratorForm({
   const [name,setName] = useState("")
   const [active,setActive] = useState(true)
   const [scheduleId,setScheduleId] = useState<number|0>(0)
-  const [loading,setLoading] = useState(false)
+  const [loading] = useState(false)
+  const saveMutation = useSaveCollaborator()
 
   useEffect(()=>{
     if(open){
@@ -40,28 +42,27 @@ export function CollaboratorForm({
 
   async function handleSubmit(e:React.FormEvent){
     e.preventDefault()
-    setLoading(true)
-    const method = initialData ? "PUT":"POST"
-    const url = initialData ? `/api/collaborators/${initialData.id}` : "/api/collaborators"
+    const selectedSchedule = schedules.find(s => s.id === scheduleId); 
 
-    const res = await fetch(url,{
-      method,
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({
-        dni,
-        name,
-        active,
-        scheduleSpecialId: scheduleId || null,
-      }),
+    saveMutation.mutate({
+      id: initialData?.id,
+      dni,
+      name,
+      active,
+      schedule: selectedSchedule // Use the found schedule object
+    }, {
+      onSuccess: () => {
+        toast.success("Guardado")
+        setOpen(false)
+        onSave()
+      },
+      onError: (err: unknown) => {
+        const errorMessage = typeof err === "object" && err !== null && "error" in err
+          ? (err as { error?: string }).error
+          : undefined;
+        toast.error(errorMessage || "Error")
+      }
     })
-    setLoading(false)
-    if(!res.ok){
-      toast.error((await res.json()).error ?? "Error")
-      return
-    }
-    toast.success("Guardado")
-    setOpen(false)
-    onSave()
   }
 
   return (
@@ -105,7 +106,7 @@ export function CollaboratorForm({
           </div>
           <SheetFooter className="flex justify-end gap-2">
             <SheetClose asChild><Button variant="outline">Cancelar</Button></SheetClose>
-            <Button type="submit" disabled={loading}>{loading?"Guardando…":"Guardar"}</Button>
+            <Button type="submit" disabled={loading || saveMutation.isPending}>{saveMutation.isPending?"Guardando…":"Guardar"}</Button>
           </SheetFooter>
         </form>
       </SheetContent>

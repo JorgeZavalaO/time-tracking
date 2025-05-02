@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-export type Schedule = { id:number; startTime:string; days:string }
+export type Schedule = { 
+    id: number; 
+    startTime: string; 
+    days: string 
+}
 
-type Collaborator = {
+export type Collaborator = {
     id: number
     dni: string
     name: string
@@ -15,27 +19,19 @@ export function useCollaborators(params: {
     pageSize: number
     search: string
 }) {
-    const [data, setData] = useState<{ items: Collaborator[]; total: number }>({
-        items: [],
-        total: 0,
-    })
-    const [loading, setLoading] = useState(false)
-    
-    useEffect(()=>{
-        const ctrl = new AbortController()
-        setLoading(true)
-        const qs = new URLSearchParams({
-            page: params.page.toString(),
-            pageSize: params.pageSize.toString(),
-            search: params.search,
-        })
-        fetch(`/api/collaborators?${qs}`,{ signal:ctrl.signal })
-            .then(r=>r.json())
-            .then(setData)
-            .catch((e)=>{ if(e.name!=="AbortError") console.error(e) })
-            .finally(()=> setLoading(false))
-        return () => ctrl.abort()
-    }, [params.page, params.pageSize, params.search])
-    
-    return {...data, loading}
+    return useQuery({
+        queryKey: ["collaborators", params.page, params.pageSize, params.search],
+        queryFn: async() => {
+            const qs = new URLSearchParams({
+                page: params.page.toString(),
+                pageSize: params.pageSize.toString(),
+                search: params.search,
+            })
+            const r = await fetch(`/api/collaborators?${qs}`);
+            if(!r.ok) throw new Error("Network");
+            return r.json() as Promise<{ items: Collaborator[]; total: number }>;
+        },
+        placeholderData: keepPreviousData,    
+        staleTime: 30_000,                    
+    });
 }
