@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 
+
 function err(message: string, status = 400) {
     return NextResponse.json(
         { error: message },
@@ -17,14 +18,14 @@ export async function GET(req: NextRequest) {
         const pageSize = parseInt(url.searchParams.get("pageSize") || "10", 10)
         const search = url.searchParams.get("search") || ""
 
-        // Construir filtro DNI o nombre
-        const where = search
+        // filtro DNI o nombre (búsqueda case-insensitive)
+        const where: Prisma.CollaboratorWhereInput = search
         ? {
             OR: [
-            { dni: { contains: search } },
-            { name: { contains: search } },
+              { dni:  { contains: search, mode: Prisma.QueryMode.insensitive } },
+              { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
             ],
-        }
+          }
         : {}
 
         // horario general para fallback
