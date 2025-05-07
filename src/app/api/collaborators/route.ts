@@ -1,111 +1,80 @@
 // LISTADO con paginación y búsqueda + CREAR un colaborador
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"
+import { Prisma, ScheduleType } from "@prisma/client"
+import { z } from "zod"
 
-
-function err(message: string, status = 400) {
-    return NextResponse.json(
-        { error: message },
-        { status }
-    )
-  }
+const qSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(10),
+  search: z.string().trim().default(""),
+})
+const bodySchema = z.object({
+  dni: z.string().regex(/^\d{8}$/),
+  name: z.string().min(2),
+  active: z.boolean().optional(),
+  scheduleSpecialId: z.number().int().positive().nullable().optional(),
+})
 
 export async function GET(req: NextRequest) {
-    try {
-        const url = req.nextUrl
-        const page = parseInt(url.searchParams.get("page") || "1", 10)
-        const pageSize = parseInt(url.searchParams.get("pageSize") || "10", 10)
-        const search = url.searchParams.get("search") || ""
-
-        // filtro DNI o nombre (búsqueda case-insensitive)
-        const where: Prisma.CollaboratorWhereInput = search
-        ? {
-            OR: [
-              { dni:  { contains: search, mode: Prisma.QueryMode.insensitive } },
-              { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-            ],
-          }
-        : {}
-
-        // horario general para fallback
-        const generalSchedule = await prisma.schedule.findFirst({
-            where: { type: "GENERAL" },
-            select: { id:true, startTime:true, days:true },
-        })
-
-        // Validar paginación
-        const [total, list] = await Promise.all([
-            // total para paginacion
-            prisma.collaborator.count({ where }),
-            //  items para paginacion 
-            prisma.collaborator.findMany({
-                where,
-                skip: (page - 1)*pageSize,
-                take: pageSize,
-                orderBy: {name: "asc"},
-                include: { scheduleSpecial: { select:{ id:true, startTime:true, days:true } } },
-            }),
-        ]);
-
-        const items = list.map(c => ({
-            id:      c.id,
-            dni:     c.dni,
-            name:    c.name,
-            active:  c.active,
-            schedule: c.scheduleSpecial ?? generalSchedule!
-          }))
-
-        return NextResponse.json({ items, total });
-         
-    } catch (error) {
-        console.error("Error in GET /collaborators:", error);
-        return err("Error interno", 500)
-    }
-}
-
-export async function POST(req: NextRequest) {
-    const {dni, name, scheduleSpecialId} = await req.json();
-
-    // Validaciones básicas
-    if (!/^\d{8}$/.test(dni)) {
-        return err("DNI inválido")
-    }
-    if (!name || name.trim() === "") {
-        return err("Nombre requerido")
-    }
-    if (scheduleSpecialId) {
-        const exists = await prisma.schedule.findUnique({ 
-            where:
-            { id:scheduleSpecialId } 
-        })
-        if (!exists) {
-            return err("Horario especial inexistente")
+    const { page, pageSize, search } = qSchema.parse(
+      Object.fromEntries(req.nextUrl.searchParams),
+    )
+  
+    const where: Prisma.CollaboratorWhereInput = search
+      ? {
+          OR: [
+            { dni: { contains: search } },
+            { name: { contains: search, mode: "insensitive" } },
+          ],
         }
-    }
+      : {}
+  
+    const [total, items] = await Promise.all([
+      prisma.collaborator.count({ where }),
+      prisma.collaborator.findMany({
+        where,
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+        orderBy: { name: "asc" },
+        include: { scheduleSpecial: true },
+      }),
+    ])
+  
+    // fetch horario general **una sola vez** si hay huecos
+    const general =
+      items.some((i) => !i.scheduleSpecial) &&
+      (await prisma.schedule.findFirst({
+        where: { type: ScheduleType.GENERAL },
+        select: { id: true, startTime: true, days: true },
+      }))
+  
+    const normalized = items.map((c) => ({
+      id: c.id,
+      dni: c.dni,
+      name: c.name,
+      active: c.active,
+      schedule: c.scheduleSpecial ?? general!,
+    }))
+  
+    return NextResponse.json({ items: normalized, total })
+  }
 
-
+  export async function POST(req: NextRequest) {
+    const data = bodySchema.parse(await req.json())
     try {
-        const created = await prisma.collaborator.create({
-            data: { dni, name: name.trim(), scheduleSpecialId: scheduleSpecialId ?? null },
-            include:{ scheduleSpecial:true },
-          })
-          return NextResponse.json(created, { status:201 })
-    } catch (error: unknown) {
-        if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2002"
-          ){
-            return NextResponse.json(
-                { message: "El DNI ya está registrado"},
-                { status: 409 }
-            );
-        } 
-        
-        console.error("Error in POST /collaborators:", error);
-        return NextResponse.json(
-            { message: "Error al crear el colaborador" },
-            { status: 500 }
-        );
+      const created = await prisma.collaborator.create({
+        data: {
+          dni: data.dni,
+          name: data.name,
+          active: data.active ?? true,
+          scheduleSpecialId: data.scheduleSpecialId ?? null,
+        },
+      })
+      return NextResponse.json(created, { status: 201 })
+    } catch (e: unknown) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+        return NextResponse.json({ error: "DNI duplicado" }, { status: 409 })
+      throw e
     }
-}
+  }

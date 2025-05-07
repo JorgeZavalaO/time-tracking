@@ -1,6 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
-export type Schedule = { id: number; startTime: string; days: string }
+export type Schedule = {
+    id: number
+    type: 'GENERAL' | 'SPECIAL'
+    startTime: string
+    days: string
+  }
+
 export type Collaborator = {
   id: number
   dni: string
