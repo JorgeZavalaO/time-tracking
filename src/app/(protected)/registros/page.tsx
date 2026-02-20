@@ -5,7 +5,7 @@ export default async function RegistrosPage() {
   const accesses = await prisma.access.findMany({
     take: 50,
     orderBy: { timestamp: 'desc' },
-    include: { collaborator: true, kiosk: true },
+    include: { collaborator: true },
   })
 
   return (
@@ -24,7 +24,6 @@ export default async function RegistrosPage() {
                   <th className='p-3 text-left'>Fecha</th>
                   <th className='p-3 text-left'>Colaborador</th>
                   <th className='p-3 text-left'>DNI</th>
-                  <th className='p-3 text-left'>Kiosk</th>
                   <th className='p-3 text-left'>Estado</th>
                   <th className='p-3 text-left'>Foto</th>
                 </tr>
@@ -37,7 +36,6 @@ export default async function RegistrosPage() {
                     </td>
                     <td className='p-3'>{a.collaborator?.name ?? '—'}</td>
                     <td className='p-3'>{a.collaborator?.dni ?? '—'}</td>
-                    <td className='p-3'>{a.kiosk?.name ?? '—'}</td>
                     <td className='p-3'>{a.status}</td>
                     <td className='p-3'>
                       {a.photo_url ? (

@@ -58,17 +58,15 @@ model Collaborator {
 }
 
 model Access {
-  id                 Int             @id @default(autoincrement())
-  collaborator       Collaborator    @relation(fields: [collaboratorId], references: [id])
-  collaboratorId     Int
-  timestamp          DateTime        @default(now())
-  status             AccessStatus
-  recordedBy         User?          @relation("UserRecordedAccesses", fields: [recordedById], references: [id])
-  recordedById       Int?
+  id               Int             @id @default(autoincrement())
+  collaborator     Collaborator    @relation(fields: [collaboratorId], references: [id])
+  collaboratorId   Int
+  timestamp        DateTime        @default(now())
+  status           AccessStatus
+  recordedBy       User?           @relation("UserRecordedAccesses", fields: [recordedById], references: [id])
+  recordedById     Int?
 
-  // Kiosk / device metadata
-  kiosk             KioskDevice? @relation(fields: [kioskId], references: [id])
-  kioskId           Int?
+  // Device metadata (kiosk removed)
   deviceFingerprint String?
   ip                String?
   photo_url         String?
@@ -76,21 +74,12 @@ model Access {
   confidence_flag   Boolean    @default(false)
 
   // Justificación opcional
-  justification       Justification?
-  
+  justification     Justification?
+
   // Edit history
-  editHistories      AccessEditHistory[]
+  editHistories    AccessEditHistory[]
 }
 
-model KioskDevice {
-  id           Int      @id @default(autoincrement())
-  name         String
-  secret_hash  String
-  is_active    Boolean  @default(true)
-  last_seen    DateTime?
-  createdAt    DateTime @default(now())
-  accesses     Access[]
-}
 
 model AccessEditHistory {
   id          Int      @id @default(autoincrement())

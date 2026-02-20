@@ -12,9 +12,8 @@ const bodySchema = z
     dni: z.string().optional(),
     qr_token: z.string().optional(),
     pin: z.string().regex(/^\d{4,8}$/),
-    kiosk_id: z.number().int().positive().optional(),
     device_fingerprint: z.string().max(255).optional(),
-    kiosk_secret: z.string().optional(),
+    // kiosk_id and kiosk_secret removed: kiosk authentication handled server-side / not required for now
     selfie_data_url: z.string().optional(),
   })
   .superRefine((val, ctx) => {
@@ -32,17 +31,8 @@ export default async function handler(req: NextRequest) {
   }
 
   const payload = bodySchema.parse(await req.json());
-  const kioskSecret = req.headers.get("x-kiosk-secret") ?? payload.kiosk_secret ?? "";
-  const kioskIdHeader = req.headers.get("x-kiosk-id");
-  const kioskId = payload.kiosk_id ?? (kioskIdHeader ? Number(kioskIdHeader) : NaN);
-
-  const kiosk = kioskSecret && Number.isInteger(kioskId) && kioskId > 0
-    ? await prisma.kioskDevice.findUnique({ where: { id: kioskId } })
-    : null;
-
-  if (!kiosk || !kiosk.is_active || !(await compare(kioskSecret, kiosk.secret_hash))) {
-    return NextResponse.json({ message: "Kiosko no autorizado" }, { status: 401 });
-  }
+  // Kiosk authentication disabled for now; requests are accepted without kiosk_id/secret.
+  // NOTE: This reduces security; consider restoring kiosk verification before production.
 
   // 1) Buscar colaborador
   const collaborator =
@@ -147,18 +137,13 @@ export default async function handler(req: NextRequest) {
     data: {
       collaboratorId: collaborator.id,
       status,
-      kioskId: kiosk.id,
+      kioskId: null,
       deviceFingerprint: payload.device_fingerprint ?? null,
       ip,
       photo_url: photoUrl,
       suspicious_reason: suspiciousReason,
       confidence_flag: confidenceFlag,
     },
-  });
-
-  await prisma.kioskDevice.update({
-    where: { id: kiosk.id },
-    data: { last_seen: new Date() },
   });
 
   return NextResponse.json(

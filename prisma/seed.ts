@@ -11,7 +11,6 @@ async function main() {
   await prisma.justification.deleteMany();
   await prisma.access.deleteMany();
   await prisma.collaborator.deleteMany();
-  await prisma.kioskDevice.deleteMany();
   await prisma.schedule.deleteMany();
   await prisma.user.deleteMany();
 

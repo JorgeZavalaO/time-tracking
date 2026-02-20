@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Camera, Clock7, LogIn, QrCode, ScanLine, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { toast } from "sonner"
 import { NumericKeypad } from "@/components/kiosk/NumericKeypad";
@@ -21,24 +21,18 @@ export default function Home(){
   const [dni, setDni] = useState("")
   const [qrToken, setQrToken] = useState("")
   const [pin, setPin] = useState("")
-  const [kioskId, setKioskId] = useState("")
-  const [kioskSecret, setKioskSecret] = useState("")
+  const [focusedField, setFocusedField] = useState<"dni" | "pin" | null>("dni")
   const [selfieDataUrl, setSelfieDataUrl] = useState<string | null>(null)
   const [lastStatus, setLastStatus] = useState<"ok" | "error" | null>(null)
   const [lastMessage, setLastMessage] = useState("")
   const [error, setError] = useState("")
 
-  useEffect(() => {
-    const savedId = localStorage.getItem("kiosk_id")
-    const savedSecret = localStorage.getItem("kiosk_secret")
-    if (savedId) setKioskId(savedId)
-    if (savedSecret) setKioskSecret(savedSecret)
-  }, [])
+  // removido: no guardamos ni pedimos kioskId / kioskSecret desde UI
 
   const canSubmit = useMemo(() => {
     const hasIdentity = mode === "DNI" ? dni.length === 8 : qrToken.length > 6
-    return hasIdentity && pin.length >= 4 && kioskId.length > 0 && kioskSecret.length > 0
-  }, [dni.length, kioskId.length, kioskSecret.length, mode, pin.length, qrToken.length])
+    return hasIdentity && pin.length >= 4
+  }, [dni.length, mode, pin.length, qrToken.length])
 
   async function toDataUrl(file: File): Promise<string> {
     return await new Promise((resolve, reject) => {
@@ -71,9 +65,7 @@ export default function Home(){
     setLastStatus(null)
     setLastMessage("")
 
-    localStorage.setItem("kiosk_id", kioskId)
-    localStorage.setItem("kiosk_secret", kioskSecret)
-
+    // NOTA: ya no enviamos kiosk_id/kiosk_secret desde el cliente.
     const res = await fetch("/api/access", {
       method: "POST",
       headers: { "Content-Type": "application/json"},
@@ -82,12 +74,10 @@ export default function Home(){
         dni: mode === "DNI" ? dni : undefined,
         qr_token: mode === "QR" ? qrToken : undefined,
         pin,
-        kiosk_id: Number(kioskId),
-        kiosk_secret: kioskSecret,
         device_fingerprint: `${navigator.platform}-${navigator.userAgent.slice(0, 80)}`,
         selfie_data_url: selfieDataUrl ?? undefined,
       }),
-      })
+    })
 
     setLoading(false)
 
@@ -162,10 +152,10 @@ export default function Home(){
                         value={dni}
                         placeholder="Ingrese DNI (8 dígitos)"
                         maxLength={8}
-                        onChange={(e) => {
-                          setDni(e.target.value.replace(/\D/g, ""))
-                          if (error) setError("")
-                        }}
+                        readOnly
+                        onClick={() => setFocusedField('dni')}
+                        onPaste={(e) => e.preventDefault()}
+                        onKeyDown={(e) => e.preventDefault()}
                       />
                     </div>
                   ) : (
@@ -180,15 +170,7 @@ export default function Home(){
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="kioskId">Kiosk ID</Label>
-                    <Input id="kioskId" value={kioskId} onChange={(e) => setKioskId(e.target.value.replace(/\D/g, ""))} placeholder="Ej: 1" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="kioskSecret">Kiosk Secret</Label>
-                    <Input id="kioskSecret" type="password" value={kioskSecret} onChange={(e) => setKioskSecret(e.target.value)} placeholder="Secret del dispositivo" />
-                  </div>
+                  {/* Kiosk ID / Secret removidos del UI — la autenticación del kiosko debe manejarse server-side */}
 
                   <div className="space-y-2">
                     <Label htmlFor="selfie" className="flex items-center gap-2"><Camera className="size-4" /> Selfie (opcional)</Label>
@@ -198,9 +180,8 @@ export default function Home(){
                       <img src={selfieDataUrl} alt="Preview selfie" className="h-24 w-24 rounded-md object-cover border" />
                     ) : null}
                   </div>
-                </div>
-
-                <div className="space-y-4">
+                  
+                  {/* PIN justo debajo de DNI (editable solo por keypad) */}
                   <div className="space-y-2">
                     <Label htmlFor="pin">PIN</Label>
                     <Input
@@ -209,15 +190,29 @@ export default function Home(){
                       inputMode="numeric"
                       value={pin}
                       maxLength={8}
-                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                      readOnly
+                      onClick={() => setFocusedField('pin')}
+                      onPaste={(e) => e.preventDefault()}
+                      onKeyDown={(e) => e.preventDefault()}
                       placeholder="••••"
                     />
                   </div>
+                </div>
 
+                <div className="space-y-4">
                   <NumericKeypad
-                    onDigit={(digit) => setPin((prev) => (prev + digit).slice(0, 8))}
-                    onBackspace={() => setPin((prev) => prev.slice(0, -1))}
-                    onClear={() => setPin("")}
+                    onDigit={(digit) => {
+                      if (focusedField === 'dni') setDni((prev) => (prev + digit).slice(0, 8))
+                      else if (focusedField === 'pin') setPin((prev) => (prev + digit).slice(0, 8))
+                    }}
+                    onBackspace={() => {
+                      if (focusedField === 'dni') setDni((prev) => prev.slice(0, -1))
+                      else if (focusedField === 'pin') setPin((prev) => prev.slice(0, -1))
+                    }}
+                    onClear={() => {
+                      if (focusedField === 'dni') setDni("")
+                      else if (focusedField === 'pin') setPin("")
+                    }}
                     disabled={loading}
                   />
 

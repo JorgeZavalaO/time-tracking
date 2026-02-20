@@ -1,6 +1,5 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSchedules } from '@/hooks/useSchedules'
 import { useDeleteSchedule } from '@/hooks/useScheduleMutations'
@@ -8,8 +7,6 @@ import { ScheduleForm } from '@/components/schedule/ScheduleForm'
 import SkeletonRow from '@/components/skeleton/SkeletonRow'
 import { toast } from 'sonner'
 
-// carga client component (KioskManager) sólo en el cliente
-const KioskManager = dynamic(() => import('@/components/KioskManager'), { ssr: false })
 
 export default function ConfiguracionPage () {
   const { data: list = [], isFetching } = useSchedules(null)
@@ -22,7 +19,7 @@ export default function ConfiguracionPage () {
       <Tabs defaultValue='horarios' className='space-y-6'>
         <TabsList>
           <TabsTrigger value='horarios'>Horarios</TabsTrigger>
-          <TabsTrigger value='kiosks'>Kiosks</TabsTrigger>
+          {/* Kiosks tab removed */}
           <TabsTrigger value='festivos' disabled>Festivos</TabsTrigger>
           <TabsTrigger value='parametros' disabled>Parámetros</TabsTrigger>
         </TabsList>
@@ -76,9 +73,7 @@ export default function ConfiguracionPage () {
           </div>
         </TabsContent>
 
-        <TabsContent value='kiosks'>
-          <KioskManager />
-        </TabsContent>
+        {/* Kiosks content removed */}
 
         <TabsContent value='festivos'>
           <p className='text-muted-foreground text-sm'>Gestión de días festivos llegará en el Sprint 4.</p>
