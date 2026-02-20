@@ -117,7 +117,7 @@ export default function Home(){
       </header>
       <main className="flex-1 container mx-auto px-4 py-8">
         <section className="text-center py-12">
-          <h2 className="text-2xl font-bold mb-4">Modo Kiosko A/B</h2>
+          <h2 className="text-2xl font-bold mb-4">Bienvenido</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto text-lg">Marca por DNI+PIN o QR+PIN con validación de kiosko autorizado.</p>
         </section>
         <div>
