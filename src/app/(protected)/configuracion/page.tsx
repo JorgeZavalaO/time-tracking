@@ -2,15 +2,12 @@
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSchedules } from '@/hooks/useSchedules'
-import { useDeleteSchedule } from '@/hooks/useScheduleMutations'
 import { ScheduleForm } from '@/components/schedule/ScheduleForm'
 import SkeletonRow from '@/components/skeleton/SkeletonRow'
-import { toast } from 'sonner'
 
 
 export default function ConfiguracionPage () {
   const { data: list = [], isFetching } = useSchedules(null)
-  const del = useDeleteSchedule()
 
   return (
     <section className='flex flex-col gap-6'>

@@ -137,7 +137,6 @@ export default async function handler(req: NextRequest) {
     data: {
       collaboratorId: collaborator.id,
       status,
-      kioskId: null,
       deviceFingerprint: payload.device_fingerprint ?? null,
       ip,
       photo_url: photoUrl,

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { NumericKeypad } from '@/components/kiosk/NumericKeypad'
 import {
   Sheet,
   SheetContent,
@@ -79,7 +78,8 @@ export function CollaboratorForm({
   search,
   initialData,
 }: Props) {
-  const { data: schedules = [] } = useSchedules('SPECIAL')
+  // Fetch all schedules (GENERAL + SPECIAL) so admin can pick any when creating collaborators
+  const { data: schedules = [] } = useSchedules(null)
   const saveMutation = useSaveCollaborator(page, pageSize, search)
 
   const [open, setOpen] = useState(false)
@@ -89,8 +89,6 @@ export function CollaboratorForm({
     register,
     handleSubmit,
     reset,
-    setValue,
-    getValues,
     formState: { errors, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -104,7 +102,7 @@ export function CollaboratorForm({
     },
   })
 
-  const [focusedField, setFocusedField] = useState<'dni'|'pin'|null>('dni')
+  
 
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
   const [qrImage, setQrImage] = useState<string>('')
@@ -221,10 +219,6 @@ export function CollaboratorForm({
                 inputMode="numeric"
                 maxLength={8}
                 {...register('dni')}
-                readOnly
-                onClick={() => setFocusedField('dni')}
-                onPaste={(e) => e.preventDefault()}
-                onKeyDown={(e) => e.preventDefault()}
               />
               {errors.dni && (
                 <p className="text-destructive text-sm">{errors.dni.message}</p>
@@ -279,10 +273,6 @@ export function CollaboratorForm({
                 maxLength={8}
                 placeholder={initialData?.hasPin ? '•••• (dejar vacío para mantener)' : 'Ej: 1234'}
                 {...register('pin')}
-                readOnly
-                onClick={() => setFocusedField('pin')}
-                onPaste={(e) => e.preventDefault()}
-                onKeyDown={(e) => e.preventDefault()}
               />
               {errors.pin && (
                 <p className="text-destructive text-sm">{errors.pin.message}</p>
@@ -303,29 +293,6 @@ export function CollaboratorForm({
             )}
 
             <SheetFooter className="flex justify-end gap-2">
-              <div className="mb-4">
-                <NumericKeypad
-                  onDigit={(digit) => {
-                    const vals = getValues()
-                    if (focusedField === 'dni') {
-                      const next = ((vals.dni ?? '') + digit).slice(0, 8)
-                      setValue('dni', next, { shouldDirty: true })
-                    } else if (focusedField === 'pin') {
-                      const next = ((vals.pin ?? '') + digit).slice(0, 8)
-                      setValue('pin', next, { shouldDirty: true })
-                    }
-                  }}
-                  onBackspace={() => {
-                    const vals = getValues()
-                    if (focusedField === 'dni') setValue('dni', (vals.dni ?? '').slice(0, -1), { shouldDirty: true })
-                    else if (focusedField === 'pin') setValue('pin', (vals.pin ?? '').slice(0, -1), { shouldDirty: true })
-                  }}
-                  onClear={() => {
-                    if (focusedField === 'dni') setValue('dni', '', { shouldDirty: true })
-                    else if (focusedField === 'pin') setValue('pin', '', { shouldDirty: true })
-                  }}
-                />
-              </div>
               <Button
                 variant="outline"
                 type="button"
