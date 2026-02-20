@@ -1,24 +1,29 @@
-# Time Tracking – Kiosko de Marcación
+# Time Tracking – Marcación de acceso
 
-Aplicación Next.js + Prisma para control de acceso de colaboradores.
+Aplicación Next.js + Prisma para el control de acceso de colaboradores.
 
-## Funcionalidades implementadas
+## Resumen de cambios recientes (feb 2026)
 
-- Marcación A/B en kiosko:
-	- `DNI + PIN`
-	- `QR + PIN` (escáner cámara + fallback manual)
-- Kiosko autorizado por dispositivo (`kiosk_id` + `kiosk_secret`)
+- Eliminado por ahora el modelo y la dependencia de "kiosks" (dispositivos): ya no existe `KioskDevice` ni se requiere `kiosk_id`/`kiosk_secret` en las peticiones de marcación. (Migración: `20260220212223_remove_kiosk_model_and_field`)
+- En la pantalla pública (kiosko) las entradas por DNI y PIN sólo pueden introducirse mediante el teclado en pantalla (NumericKeypad). El teclado físico y el pegado están bloqueados para evitar entradas externas.
+- En el panel administrativo (crear/editar colaborador) se mantiene la UI mejorada y el NumericKeypad fue removido: los administradores pueden usar el teclado físico normalmente para DNI y PIN.
+- El endpoint `/api/access` valida PIN y registra accesos como antes, pero ya no requiere credenciales de kiosko. Se sigue registrando metadata (IP, fingerprint, selfie opcional, flags de sospecha).
+
+> Nota de seguridad: eliminar la autenticación por dispositivo reduce una capa de protección. Si este repositorio se despliega en producción, considera introducir otro mecanismo de autorización de kioskos (device tokens, VPN, o modo kiosk solo en redes internas).
+
+## Funcionalidades principales
+
+- Marcación por `DNI + PIN` y `QR + PIN` (modo público)
 - PIN hasheado (`bcryptjs`) y QR token por colaborador
-- Regeneración de QR desde panel de colaboradores
-- Marcación con metadata: IP, fingerprint de dispositivo, kiosk
-- Selfie opcional en marcación (subida a Blob si está configurado)
-- Flags básicos anti-suplantación (`confidence_flag`, `suspicious_reason`)
+- Regeneración de QR desde el panel de colaboradores (admin)
+- Selfie opcional en marcación (subida si está configurado el storage)
+- Registro de metadata: IP, device fingerprint, foto, flags de sospecha
 
 ## Requisitos
 
 - Node 18+
 - PNPM
-- Base de datos PostgreSQL
+- PostgreSQL
 
 ## Variables de entorno
 
@@ -29,11 +34,13 @@ Copia `.env.example` a `.env` y completa valores:
 - `NEXTAUTH_URL`
 - `BLOB_READ_WRITE_TOKEN` (opcional, para selfies)
 
-## Arranque local
+## Arranque local (desarrollo)
 
 ```bash
 pnpm install
-pnpm prisma migrate reset
+# Si estás en desarrollo y quieres aplicar migraciones locales:
+pnpm prisma migrate dev
+# (opcional) poblar datos de ejemplo
 pnpm prisma db seed
 pnpm dev
 ```
@@ -43,11 +50,21 @@ Abrir en navegador:
 - Kiosko público: `http://localhost:3000`
 - Login admin: `http://localhost:3000/auth/signin`
 
-## Registro de kiosko (admin)
+## Notas de uso relevantes
 
-1. Crear dispositivo en `POST /api/kiosks` (requiere sesión admin).
-2. Guardar `id` y `secret` devuelto (el secret se muestra una sola vez).
-3. En pantalla kiosko (`/`) ingresar `Kiosk ID` y `Kiosk Secret`.
+- Pantalla pública (`/`): al usar `DNI + PIN` o `QR + PIN`, el campo DNI y el campo PIN se deben completar únicamente con el teclado en pantalla. Esto evita que se registren entradas desde teclados externos en un kiosko público.
+- Panel administrativo (`/empleados`): el formulario para crear/editar colaboradores permite entrada de teclado físico normalmente; el NumericKeypad se eliminó de esta vista porque no corresponde al modo administrador.
+- API `/api/access`: ya no requiere `kiosk_id`/`kiosk_secret`. Los campos esperados son `{ method, dni|qr_token, pin, device_fingerprint?, selfie_data_url? }`.
+
+## Migraciones y generación de cliente Prisma
+
+- Si traes los cambios a una copia local, aplica las migraciones y regenera el cliente Prisma:
+
+```bash
+pnpm prisma migrate deploy    # en producción
+pnpm prisma migrate dev       # en desarrollo
+pnpm prisma generate
+```
 
 ## Comprobación rápida
 
@@ -55,3 +72,7 @@ Abrir en navegador:
 pnpm lint
 pnpm prisma migrate status
 ```
+
+## Changelog
+
+Consulta `CHANGELOG.md` para una lista detallada de cambios recientes.
