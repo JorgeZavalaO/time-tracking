@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Time Tracking – Kiosko de Marcación
 
-## Getting Started
+Aplicación Next.js + Prisma para control de acceso de colaboradores.
 
-First, run the development server:
+## Funcionalidades implementadas
+
+- Marcación A/B en kiosko:
+	- `DNI + PIN`
+	- `QR + PIN` (escáner cámara + fallback manual)
+- Kiosko autorizado por dispositivo (`kiosk_id` + `kiosk_secret`)
+- PIN hasheado (`bcryptjs`) y QR token por colaborador
+- Regeneración de QR desde panel de colaboradores
+- Marcación con metadata: IP, fingerprint de dispositivo, kiosk
+- Selfie opcional en marcación (subida a Blob si está configurado)
+- Flags básicos anti-suplantación (`confidence_flag`, `suspicious_reason`)
+
+## Requisitos
+
+- Node 18+
+- PNPM
+- Base de datos PostgreSQL
+
+## Variables de entorno
+
+Copia `.env.example` a `.env` y completa valores:
+
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `NEXTAUTH_URL`
+- `BLOB_READ_WRITE_TOKEN` (opcional, para selfies)
+
+## Arranque local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+pnpm prisma migrate reset
+pnpm prisma db seed
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir en navegador:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Kiosko público: `http://localhost:3000`
+- Login admin: `http://localhost:3000/auth/signin`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Registro de kiosko (admin)
 
-## Learn More
+1. Crear dispositivo en `POST /api/kiosks` (requiere sesión admin).
+2. Guardar `id` y `secret` devuelto (el secret se muestra una sola vez).
+3. En pantalla kiosko (`/`) ingresar `Kiosk ID` y `Kiosk Secret`.
 
-To learn more about Next.js, take a look at the following resources:
+## Comprobación rápida
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm lint
+pnpm prisma migrate status
+```

@@ -3,6 +3,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"           
+import { auth } from "@/lib/auth";
+import { hash } from "bcryptjs";
+import { z } from "zod";
 
 // Utilidad pequeña para convertir string → número y validar
 function toValidInt(value: string): number | null {
@@ -10,10 +13,36 @@ function toValidInt(value: string): number | null {
   return Number.isInteger(num) && num > 0 ? num : null;
 }
 
+const putSchema = z.object({
+  name: z.string().min(1, "Nombre requerido").transform((v) => v.trim()),
+  active: z.boolean().optional(),
+  isBlocked: z.boolean().optional(),
+  pin: z.string().regex(/^\d{4,8}$/).optional(),
+  scheduleSpecialId: z.number().int().positive().nullable().optional(),
+})
+
+async function requireAdmin() {
+  const session = await auth()
+  if (!session?.user?.id) return null
+
+  const user = await prisma.user.findUnique({
+    where: { id: Number(session.user.id) },
+    select: { id: true, role: true },
+  })
+
+  if (!user || user.role !== "admin") return null
+  return user
+}
+
 // @ts-expect-error Next.js App Router context type
 // PUT ▸ Actualizar un colaborador
 export async function PUT(req: NextRequest, context) {
   try {
+    const admin = await requireAdmin()
+    if (!admin) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
     // 1. Validar el ID recibido en la URL 
     const id = toValidInt(context.params.id);
     if (id === null) {
@@ -24,12 +53,7 @@ export async function PUT(req: NextRequest, context) {
     }
 
     // 2. Leer y validar el cuerpo (body)
-    const { name, active, scheduleSpecialId } = await req.json();
-
-    if (!name || name.trim()==="") return NextResponse.json(
-        { error:"Nombre requerido" },
-        { status:400 }
-    )
+    const { name, active, isBlocked, scheduleSpecialId, pin } = putSchema.parse(await req.json());
 
     if (scheduleSpecialId) {
         const exists = await prisma.schedule.findUnique({ 
@@ -44,8 +68,11 @@ export async function PUT(req: NextRequest, context) {
     const updated = await prisma.collaborator.update({
         where:{ id },
         data :{
-          name: name.trim(),
-          active: Boolean(active),
+          name,
+          active: active ?? undefined,
+          is_active: active ?? undefined,
+          is_blocked: isBlocked ?? undefined,
+          pin_hash: pin ? await hash(pin, 10) : undefined,
           scheduleSpecialId: scheduleSpecialId ?? null,
         },
         include:{ scheduleSpecial:true },
@@ -77,6 +104,11 @@ export async function PUT(req: NextRequest, context) {
 // DELETE ▸ Eliminar un colaborador 
 export async function DELETE(req: NextRequest, context) {
   try {
+    const admin = await requireAdmin()
+    if (!admin) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
     // 1. Validar el ID 
     const id = toValidInt(context.params.id);
     if (id === null) {

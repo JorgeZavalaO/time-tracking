@@ -12,6 +12,9 @@ export type Collaborator = {
   dni: string
   name: string
   active: boolean
+  isBlocked?: boolean
+  hasPin?: boolean
+  hasQr?: boolean
   schedule: Schedule
 }
 

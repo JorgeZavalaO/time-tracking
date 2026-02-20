@@ -57,6 +57,7 @@ export default function EmpleadosPage() {
               <th scope="col" className="p-2 text-left">DNI</th>
               <th scope="col" className="p-2 text-left">Nombre</th>
               <th scope="col" className="p-2 text-left">Horario</th>
+              <th scope="col" className="p-2 text-left">Seguridad</th>
               <th scope="col" className="p-2 text-center">Activo</th>
               <th scope="col" className="p-2 text-center">Acciones</th>
             </tr>
@@ -64,11 +65,11 @@ export default function EmpleadosPage() {
           <tbody>
             {isFetching ? (
               Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonRow key={i} cols={5} />
+                <SkeletonRow key={i} cols={6} />
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                <td colSpan={6} className="p-4 text-center text-muted-foreground">
                   — Sin resultados —
                 </td>
               </tr>
@@ -84,6 +85,21 @@ export default function EmpleadosPage() {
                       <Clock className="size-4 text-muted-foreground" />
                     )}
                     <span>{col.schedule.days} · {col.schedule.startTime}</span>
+                  </td>
+                  <td className="p-2">
+                    <div className="flex flex-wrap gap-1">
+                      <span className={`rounded px-2 py-0.5 text-xs ${col.hasPin ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {col.hasPin ? 'PIN OK' : 'Sin PIN'}
+                      </span>
+                      <span className={`rounded px-2 py-0.5 text-xs ${col.hasQr ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {col.hasQr ? 'QR OK' : 'Sin QR'}
+                      </span>
+                      {col.isBlocked ? (
+                        <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">
+                          Bloqueado
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="p-2 text-center">
                     {col.active ? (

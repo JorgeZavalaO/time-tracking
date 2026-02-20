@@ -9,7 +9,11 @@ export function useSaveCollaborator(
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (
-      payload: Partial<Collaborator> & { scheduleSpecialId?: number | null },
+      payload: Partial<Collaborator> & {
+        scheduleSpecialId?: number | null
+        pin?: string
+        isBlocked?: boolean
+      },
     ) => {
       const url = payload.id
         ? `/api/collaborators/${payload.id}`

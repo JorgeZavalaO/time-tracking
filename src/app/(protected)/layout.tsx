@@ -20,14 +20,12 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <>
-      <SidebarProvider defaultOpen={true}>
-        <AppSidebar />
-        <main className=" flex flex-col w-full p-4">
-          <SidebarTrigger className="md:hidden fixed top-4 left-4 z-50" />
-          {children}
-        </main>
-      </SidebarProvider>
-    </>
-  );
+    <SidebarProvider defaultOpen>
+      <AppSidebar />
+      <main className="ml-[--sidebar-width] flex-1 overflow-auto p-4">
+        <SidebarTrigger className="md:hidden fixed top-4 left-4 z-50" />
+        {children}
+      </main>
+    </SidebarProvider>
+  )
 }

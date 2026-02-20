@@ -3,6 +3,7 @@
 import { Calendar, Home, UserRound, Search, Settings } from "lucide-react"
 
 import Link from "next/link"
+import Image from "next/image"
 
 import {
   
@@ -61,7 +62,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <img src="/next.svg" alt="logo" className="h-12 w-20" />
+        <Image src="/next.svg" alt="logo" width={80} height={48} className="h-12 w-20" />
       </SidebarHeader>
       <SidebarContent>
         {/* <SidebarMenu>

@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  //output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -37,6 +36,7 @@ model User {
   recordedAccesses     Access[]           @relation("UserRecordedAccesses")
   scheduleChanges      ScheduleHistory[]  @relation("UserScheduleChanges")
   createdJustifications Justification[]   @relation("UserCreatedJustifications")
+  accessEditHistories  AccessEditHistory[]
   notifications        Notification[]
 }
 
@@ -45,6 +45,11 @@ model Collaborator {
   dni                 String      @unique
   name                String
   active              Boolean     @default(true)
+  is_active           Boolean     @default(true)
+  is_blocked          Boolean     @default(false)
+  pin_hash            String?
+  qr_token            String?     @unique
+  photo_url           String?
   scheduleSpecial     Schedule?   @relation("SpecialFor", fields: [scheduleSpecialId], references: [id])
   scheduleSpecialId   Int?
   accesses            Access[]
@@ -61,8 +66,42 @@ model Access {
   recordedBy         User?          @relation("UserRecordedAccesses", fields: [recordedById], references: [id])
   recordedById       Int?
 
+  // Kiosk / device metadata
+  kiosk             KioskDevice? @relation(fields: [kioskId], references: [id])
+  kioskId           Int?
+  deviceFingerprint String?
+  ip                String?
+  photo_url         String?
+  suspicious_reason String?
+  confidence_flag   Boolean    @default(false)
+
   // Justificación opcional
   justification       Justification?
+  
+  // Edit history
+  editHistories      AccessEditHistory[]
+}
+
+model KioskDevice {
+  id           Int      @id @default(autoincrement())
+  name         String
+  secret_hash  String
+  is_active    Boolean  @default(true)
+  last_seen    DateTime?
+  createdAt    DateTime @default(now())
+  accesses     Access[]
+}
+
+model AccessEditHistory {
+  id          Int      @id @default(autoincrement())
+  access      Access   @relation(fields: [accessId], references: [id])
+  accessId    Int
+  editedBy    User     @relation(fields: [editedById], references: [id])
+  editedById  Int
+  oldData     Json
+  newData     Json
+  reason      String
+  editedAt    DateTime @default(now())
 }
 
 model Justification {
@@ -78,7 +117,7 @@ model Justification {
 model Schedule {
   id              Int               @id @default(autoincrement())
   type            ScheduleType
-  days            String            // e.g. "Mon-Fri", "Sat"
+  days            String[]          // ["Mon","Tue","Wed","Thu","Fri"]
   startTime       String            // e.g. "08:30"
   specialFor      Collaborator[]    @relation("SpecialFor")
   history         ScheduleHistory[]
