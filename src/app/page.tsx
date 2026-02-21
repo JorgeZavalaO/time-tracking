@@ -83,7 +83,8 @@ export default function Home(){
 
     const data = await res.json()
     if(!res.ok) {
-      setError(data.message|| "Ocurrió un error desconocido")
+      // Mostrar solo el toast y el bloque de estado (lastStatus/lastMessage).
+      // Evitamos setError(...) aquí para no duplicar el mensaje (parrafo + bloque).
       setLastStatus("error")
       setLastMessage(data.message|| "Ocurrió un error desconocido")
       toast.error(data.message|| "Ocurrió un error desconocido")
@@ -108,7 +109,7 @@ export default function Home(){
     <div className="flex min-h-screen flex-col">
       <header className="bg-white border-b">
         <div className="flex items-center justify-between px-6 py-2">
-          <h1 className="font-bold text-xl">Kiosko de marcación</h1>
+          <h1 className="font-bold text-xl">Sistema de asistencia</h1>
           <Button variant="outline" onClick={() => router.push('/auth/signin')}>
             <LogIn/>
             Acceso Administrativo
