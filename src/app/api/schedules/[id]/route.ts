@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ScheduleType } from "@prisma/client";
+import { ScheduleType, AuditStatus } from "@prisma/client";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { requireRole, Permissions } from "@/lib/auth-guard";
+import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({
   type: z.nativeEnum(ScheduleType).optional(),
@@ -15,18 +16,15 @@ const bodySchema = z.object({
 
 export async function PUT(req: NextRequest, ctx: unknown) {
   const { params } = ctx as { params: { id: string } }
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  const authResult = await requireRole(...Permissions.SCHEDULE_WRITE)
+  if (!authResult.ok) return authResult.response
 
   const id = Number(params.id);
   if (!id) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    return NextResponse.json({ error: "ID inválido", code: "INVALID_ID" }, { status: 400 });
   }
 
   const raw = await req.json();
-  // normalizamos days igual que en POST
   const daysArray: string[] | undefined =
     raw.days == null
       ? undefined
@@ -36,12 +34,11 @@ export async function PUT(req: NextRequest, ctx: unknown) {
       ? raw.days.split(",").map((d: string) => d.trim())
       : undefined;
 
-  // validamos
   const data = bodySchema.parse({ ...raw, days: daysArray });
 
   const prev = await prisma.schedule.findUnique({ where: { id } });
   if (!prev) {
-    return NextResponse.json({ error: "Horario no encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "Horario no encontrado", code: "NOT_FOUND" }, { status: 404 });
   }
 
   const updateData: Partial<import("@prisma/client").Schedule> = {};
@@ -49,7 +46,7 @@ export async function PUT(req: NextRequest, ctx: unknown) {
   if (data.days) updateData.days = data.days;
   if (data.startTime) updateData.startTime = data.startTime;
 
-  // guardamos y dejamos historial
+  // Guardar schedule + historial enriquecido en transacción
   const [updated] = await prisma.$transaction([
     prisma.schedule.update({ where: { id }, data: updateData }),
     prisma.scheduleHistory.create({
@@ -57,25 +54,63 @@ export async function PUT(req: NextRequest, ctx: unknown) {
         scheduleId: id,
         oldStartTime: prev.startTime,
         newStartTime: data.startTime ?? prev.startTime,
-        changedById: Number(session.user.id),
+        oldDays: prev.days,
+        newDays: data.days ?? prev.days,
+        oldType: prev.type,
+        newType: data.type ?? prev.type,
+        changedById: authResult.userId,
+        reason: raw.reason ?? null,
       },
     }),
   ]);
+
+  await logAudit({
+    actorId: authResult.userId,
+    actorRole: authResult.role,
+    action: "UPDATE",
+    resource: "SCHEDULE",
+    resourceId: id,
+    status: AuditStatus.SUCCESS,
+    before: { startTime: prev.startTime, days: prev.days, type: prev.type },
+    after: { startTime: updated.startTime, days: updated.days, type: updated.type },
+    reason: raw.reason ?? null,
+  })
 
   return NextResponse.json(updated);
 }
 
 export async function DELETE(req: NextRequest, ctx: unknown) {
   const { params } = ctx as { params: { id: string } }
+
+  const authResult = await requireRole(...Permissions.SCHEDULE_DELETE)
+  if (!authResult.ok) return authResult.response
+
   const id = Number(params.id);
   if (!id) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    return NextResponse.json({ error: "ID inválido", code: "INVALID_ID" }, { status: 400 });
   }
+
   try {
+    const before = await prisma.schedule.findUnique({
+      where: { id },
+      select: { type: true, startTime: true, days: true },
+    })
+
     await prisma.schedule.delete({ where: { id } });
+
+    await logAudit({
+      actorId: authResult.userId,
+      actorRole: authResult.role,
+      action: "DELETE",
+      resource: "SCHEDULE",
+      resourceId: id,
+      status: AuditStatus.SUCCESS,
+      before,
+    })
+
     return NextResponse.json({ message: "Horario eliminado" });
   } catch (e) {
     console.error("Error DELETE /schedules/[id]:", e);
-    return NextResponse.json({ error: "No se pudo eliminar" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo eliminar", code: "INTERNAL_ERROR" }, { status: 500 });
   }
 }

@@ -53,6 +53,12 @@ type Props = {
     isBlocked?: boolean
     hasPin?: boolean
     hasQr?: boolean
+    photoUrl?: string | null
+    position?: string | null
+    hireDate?: string | null
+    salary?: number | null
+    paymentType?: 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY' | null
+    tags?: string[]
     schedule: Schedule | null
   }
 }
@@ -64,8 +70,13 @@ const schema = z.object({
   active: z.boolean(),
   isBlocked: z.boolean(),
   pin: z.string().regex(/^$|^\d{4,8}$/, 'PIN debe tener 4 a 8 dígitos'),
-  // Recibimos string (option value), lo validamos como cualquier string
   scheduleSpecialId: z.string(),
+  // RRHH (Sprint 3)
+  position: z.string().max(100).optional().or(z.literal('')),
+  hireDate: z.string().optional().or(z.literal('')),
+  salary: z.string().optional().or(z.literal('')),
+  paymentType: z.enum(['MONTHLY', 'BIWEEKLY', 'WEEKLY', '']),
+  tags: z.string().optional(),  // comma-separated
 })
 
 // Tipo del formulario (lo que recibe React Hook Form)
@@ -99,6 +110,11 @@ export function CollaboratorForm({
       isBlocked: false,
       pin: '',
       scheduleSpecialId: '',
+      position: '',
+      hireDate: '',
+      salary: '',
+      paymentType: '',
+      tags: '',
     },
   })
 
@@ -121,6 +137,13 @@ export function CollaboratorForm({
         scheduleSpecialId: initialData?.schedule?.id
           ? String(initialData.schedule.id)
           : '',
+        position: initialData?.position ?? '',
+        hireDate: initialData?.hireDate
+          ? new Date(initialData.hireDate).toISOString().split('T')[0]
+          : '',
+        salary: initialData?.salary != null ? String(initialData.salary) : '',
+        paymentType: initialData?.paymentType ?? '',
+        tags: initialData?.tags?.join(', ') ?? '',
       })
     }
   }, [open, initialData, reset])
@@ -146,6 +169,13 @@ export function CollaboratorForm({
       pin: data.pin || undefined,
       scheduleSpecialId:
         data.scheduleSpecialId === '' ? null : Number(data.scheduleSpecialId),
+      position: data.position || null,
+      hireDate: data.hireDate ? new Date(data.hireDate).toISOString() : null,
+      salary: data.salary ? Number(data.salary) : null,
+      paymentType: (data.paymentType || null) as 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY' | null,
+      tags: data.tags
+        ? data.tags.split(',').map((t) => t.trim()).filter(Boolean)
+        : [],
     }
 
     saveMutation.mutate(payload, {
@@ -277,6 +307,64 @@ export function CollaboratorForm({
               {errors.pin && (
                 <p className="text-destructive text-sm">{errors.pin.message}</p>
               )}
+            </div>
+
+            {/* ── Campos RRHH ── */}
+            <div className="border-t pt-4 space-y-4">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Información RRHH</p>
+
+              {/* Cargo */}
+              <div>
+                <Label htmlFor="position">Cargo / Puesto</Label>
+                <Input id="position" placeholder="Ej: Analista, Operario…" {...register('position')} />
+              </div>
+
+              {/* Fecha de ingreso */}
+              <div>
+                <Label htmlFor="hireDate">Fecha de ingreso</Label>
+                <Input id="hireDate" type="date" {...register('hireDate')} />
+              </div>
+
+              {/* Sueldo y tipo de pago */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="salary">Sueldo base</Label>
+                  <Input
+                    id="salary"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    {...register('salary')}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="paymentType">Tipo de pago</Label>
+                  <select
+                    id="paymentType"
+                    className="border rounded-md px-2 py-1 w-full text-sm h-10"
+                    {...register('paymentType')}
+                  >
+                    <option value="">— No especificado —</option>
+                    <option value="MONTHLY">Mensual</option>
+                    <option value="BIWEEKLY">Quincenal</option>
+                    <option value="WEEKLY">Semanal</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Etiquetas/grupos */}
+              <div>
+                <Label htmlFor="tags">Etiquetas (separadas por coma)</Label>
+                <Input
+                  id="tags"
+                  placeholder="Ej: ventas, turno-mañana"
+                  {...register('tags')}
+                />
+                <p className="text-muted-foreground text-xs mt-1">
+                  Úsalas para agrupar colaboradores por área o turno.
+                </p>
+              </div>
             </div>
 
             {initialData?.id && (

@@ -23,12 +23,41 @@ enum ScheduleType {
   SPECIAL
 }
 
+enum Role {
+  ADMIN
+  RRHH
+  SUPERVISOR
+  READ_ONLY
+}
+
+enum AuditStatus {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+enum PaymentType {
+  MONTHLY
+  BIWEEKLY
+  WEEKLY
+}
+
+enum LateDiscountPolicy {
+  BY_MINUTE
+  BY_RANGE
+}
+
+enum LunchDeductionType {
+  FIXED
+  REAL_TIME
+}
+
 model User {
   id                   Int                @id @default(autoincrement())
   email                String             @unique
   password             String
   name                 String?
-  role                 String             @default("admin") // admin / employee / etc.
+  role                 Role               @default(ADMIN)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -38,6 +67,7 @@ model User {
   createdJustifications Justification[]   @relation("UserCreatedJustifications")
   accessEditHistories  AccessEditHistory[]
   notifications        Notification[]
+  auditLogs            AuditLog[]         @relation("ActorAuditLogs")
 }
 
 model Collaborator {
@@ -50,6 +80,12 @@ model Collaborator {
   pin_hash            String?
   qr_token            String?     @unique
   photo_url           String?
+  tags                String[]    @default([])
+  // RRHH fields (Sprint 3)
+  position            String?
+  hireDate            DateTime?
+  salary              Decimal?    @db.Decimal(12, 2)
+  paymentType         PaymentType?
   scheduleSpecial     Schedule?   @relation("SpecialFor", fields: [scheduleSpecialId], references: [id])
   scheduleSpecialId   Int?
   accesses            Access[]
@@ -122,6 +158,11 @@ model ScheduleHistory {
   changedById   Int
   oldStartTime  String
   newStartTime  String
+  oldDays       String[]     @default([])
+  newDays       String[]     @default([])
+  oldType       ScheduleType?
+  newType       ScheduleType?
+  reason        String?
   changedAt     DateTime   @default(now())
 }
 
@@ -132,4 +173,47 @@ model Notification {
   message     String
   read        Boolean   @default(false)
   createdAt   DateTime  @default(now())
+}
+
+// Configuración global de empresa (singleton: id = 1 siempre)
+model CompanySettings {
+  id                    Int                 @id @default(1)
+  companyName           String              @default("Mi Empresa")
+  ruc                   String?
+  timezone              String              @default("America/Lima")
+  // Tolerancia y descuento por tardanza
+  lateTolerance         Int                 @default(0)   // minutos de gracia
+  lateDiscountPolicy    LateDiscountPolicy  @default(BY_MINUTE)
+  // Horas extra
+  overtimeEnabled       Boolean             @default(false)
+  overtimeBeforeMinutes Int                 @default(0)   // minutos antes del turno que cuentan
+  overtimeAfterMinutes  Int                 @default(0)   // minutos después del turno que cuentan
+  overtimeRoundMinutes  Int                 @default(15)  // redondeo de horas extra
+  // Almuerzo
+  lunchDurationMinutes  Int                 @default(60)
+  lunchDeductionType    LunchDeductionType  @default(FIXED)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+}
+
+model AuditLog {
+  id         Int          @id @default(autoincrement())
+  actor      User?        @relation("ActorAuditLogs", fields: [actorId], references: [id])
+  actorId    Int?
+  actorRole  String?      // snapshot del rol en el momento de la acción
+  action     String       // CREATE, UPDATE, DELETE, ACCESS_ATTEMPT, QR_REGEN, etc.
+  resource   String       // COLLABORATOR, SCHEDULE, ACCESS, USER, etc.
+  resourceId String?
+  status     AuditStatus
+  error      String?
+  before     Json?
+  after      Json?
+  reason     String?
+  metadata   Json?        // IP, fingerprint, etc.
+  createdAt  DateTime     @default(now())
+
+  @@index([actorId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([action, status])
 }

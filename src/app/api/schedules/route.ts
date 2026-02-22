@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ScheduleType } from "@prisma/client";
+import { ScheduleType, AuditStatus } from "@prisma/client";
 import { z } from "zod";
+import { requireRole, Permissions } from "@/lib/auth-guard";
+import { logAudit } from "@/lib/audit";
 
 // ahora schema sólo valida array
 const bodySchema = z.object({
@@ -13,6 +15,9 @@ const bodySchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
+  const authResult = await requireRole(...Permissions.SCHEDULE_READ)
+  if (!authResult.ok) return authResult.response
+
   const typeParam = req.nextUrl.searchParams.get("type") as ScheduleType | null;
   const where = typeParam ? { type: typeParam } : {};
   const list = await prisma.schedule.findMany({
@@ -24,6 +29,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const authResult = await requireRole(...Permissions.SCHEDULE_WRITE)
+  if (!authResult.ok) return authResult.response
+
   // 1) leemos el body
   const raw = await req.json();
 
@@ -41,10 +49,20 @@ export async function POST(req: NextRequest) {
   const created = await prisma.schedule.create({
     data: {
       type: data.type,
-      days: data.days,       // requiere Schema.prisma: days String[]
+      days: data.days,
       startTime: data.startTime,
     },
   });
+
+  await logAudit({
+    actorId: authResult.userId,
+    actorRole: authResult.role,
+    action: "CREATE",
+    resource: "SCHEDULE",
+    resourceId: created.id,
+    status: AuditStatus.SUCCESS,
+    after: created,
+  })
 
   return NextResponse.json(created, { status: 201 });
 }

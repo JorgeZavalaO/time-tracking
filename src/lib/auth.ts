@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
 import { compare } from "bcryptjs";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { Role } from "@prisma/client"
 
 type Credentials = { email: string; password: string };
 
@@ -18,42 +19,42 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             email:{ label: "Email", type: "email"},
             password:{ label: "password", type: "password"},
         },
-        async authorize(creds): Promise<{ id: string; email: string; name: string } | null> {
+        async authorize(creds): Promise<{ id: string; email: string; name: string; role: Role } | null> {
             const { email, password } = creds as Credentials;
             if (!email || !password) throw new Error("Credenciales inválidas");
     
-            // Ahora busca en User
             const user = await prisma.user.findUnique({ where: { email } });
-            if (!user || user.role !== "admin") throw new Error("Acceso denegado");
+            // Solo roles con acceso al panel de administración
+            if (!user || user.role === Role.READ_ONLY) throw new Error("Acceso denegado");
     
             const ok = await compare(password, user.password);
             if (!ok) throw new Error("Credenciales inválidas");
     
-            return { id: user.id.toString(), email: user.email, name: user.name ?? "" };
+            return { id: user.id.toString(), email: user.email, name: user.name ?? "", role: user.role };
           },
     }),
   ],
-    // --- 4) Callbacks para inyectar el ID en token y sesión ---
     callbacks: {
         async jwt({ token, user }) {
         if (user) {
             token.sub = user.id;
-            // Puedes agregar más datos al token si lo necesitas
+            // Propagar el rol en el token para evitar consultas a DB en cada request
+            token.role = (user as { role?: Role }).role
         }
         return token;
         },
         async session({ session, token }) {
         if (session.user && token.sub) {
             session.user.id = token.sub;
+            session.user.role = token.role as Role;
         }
         return session;
         },
     },
     
-    // --- 5) Páginas personalizadas (opcional) ---
     pages: {
         signIn: "/auth/signin",
     },
     
-    debug: process.env.NODE_ENV === "development", // Desactiva en producción
+    debug: process.env.NODE_ENV === "development",
 });

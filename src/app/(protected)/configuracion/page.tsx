@@ -4,6 +4,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSchedules } from '@/hooks/useSchedules'
 import { ScheduleForm } from '@/components/schedule/ScheduleForm'
 import SkeletonRow from '@/components/skeleton/SkeletonRow'
+import { SettingsForm } from '@/components/settings/SettingsForm'
+import { BulkScheduleByTag } from '@/components/schedule/BulkScheduleByTag'
 
 
 export default function ConfiguracionPage () {
@@ -16,9 +18,8 @@ export default function ConfiguracionPage () {
       <Tabs defaultValue='horarios' className='space-y-6'>
         <TabsList>
           <TabsTrigger value='horarios'>Horarios</TabsTrigger>
-          {/* Kiosks tab removed */}
+          <TabsTrigger value='parametros'>Parámetros</TabsTrigger>
           <TabsTrigger value='festivos' disabled>Festivos</TabsTrigger>
-          <TabsTrigger value='parametros' disabled>Parámetros</TabsTrigger>
         </TabsList>
 
         <TabsContent value='horarios' className='space-y-4'>
@@ -68,16 +69,23 @@ export default function ConfiguracionPage () {
               </tbody>
             </table>
           </div>
+
+          <BulkScheduleByTag />
         </TabsContent>
 
         {/* Kiosks content removed */}
 
         <TabsContent value='festivos'>
-          <p className='text-muted-foreground text-sm'>Gestión de días festivos llegará en el Sprint 4.</p>
+          <p className='text-muted-foreground text-sm'>Gestión de días festivos llegará en una próxima versión.</p>
         </TabsContent>
 
-        <TabsContent value='parametros'>
-          <p className='text-muted-foreground text-sm'>Parámetros de tardanza y reglas se habilitarán en el Sprint 4.</p>
+        <TabsContent value='parametros' className='space-y-6'>
+          <div>
+            <p className='text-muted-foreground text-sm mb-6'>
+              Configure los parámetros globales de tardanza, horas extra y almuerzo que aplican a toda la empresa.
+            </p>
+            <SettingsForm />
+          </div>
         </TabsContent>
       </Tabs>
     </section>

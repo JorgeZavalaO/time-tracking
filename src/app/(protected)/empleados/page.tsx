@@ -8,16 +8,18 @@ import useDebounce from '@/hooks/useDebounce'
 import SkeletonRow from '@/components/skeleton/SkeletonRow'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { BadgeCheck, Clock } from 'lucide-react'
+import { BadgeCheck, Clock, Tag, X } from 'lucide-react'
 
 const PAGE_SIZE = 10
 
 export default function EmpleadosPage() {
   const [page, setPage] = useState(1)
   const [searchRaw, setSearchRaw] = useState('')
+  const [tagFilterRaw, setTagFilterRaw] = useState('')
+  const [tagFilter, setTagFilter] = useState<string | undefined>(undefined)
   const search = useDebounce(searchRaw, 400)
 
-  const { data, isFetching } = useCollaborators(page, PAGE_SIZE, search)
+  const { data, isFetching } = useCollaborators(page, PAGE_SIZE, search, tagFilter)
   const items = data?.items ?? []
   const total = data?.total ?? 0
 
@@ -35,15 +37,51 @@ export default function EmpleadosPage() {
         />
       </header>
 
-      <div className="max-w-md">
-        <Input
-          placeholder="Buscar DNI / nombre"
-          value={searchRaw}
-          onChange={(e) => {
-            setSearchRaw(e.target.value)
+      <div className="flex flex-wrap gap-3 items-start">
+        <div className="flex-1 min-w-[200px] max-w-sm">
+          <Input
+            placeholder="Buscar DNI / nombre"
+            value={searchRaw}
+            onChange={(e) => {
+              setSearchRaw(e.target.value)
+              setPage(1)
+            }}
+          />
+        </div>
+        <form
+          className="flex gap-2 items-center"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setTagFilter(tagFilterRaw.trim() || undefined)
             setPage(1)
           }}
-        />
+        >
+          <div className="relative flex items-center">
+            <Tag className="absolute left-2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-7 w-44"
+              placeholder="Filtrar etiqueta"
+              value={tagFilterRaw}
+              onChange={(e) => setTagFilterRaw(e.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="outline" size="sm">Filtrar</Button>
+          {tagFilter && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => { setTagFilter(undefined); setTagFilterRaw(''); setPage(1) }}
+            >
+              <X className="size-4" />
+            </Button>
+          )}
+        </form>
+        {tagFilter && (
+          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <Tag className="size-3" /> {tagFilter}
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -57,6 +95,7 @@ export default function EmpleadosPage() {
               <th scope="col" className="p-2 text-left">DNI</th>
               <th scope="col" className="p-2 text-left">Nombre</th>
               <th scope="col" className="p-2 text-left">Horario</th>
+              <th scope="col" className="p-2 text-left">Etiquetas</th>
               <th scope="col" className="p-2 text-left">Seguridad</th>
               <th scope="col" className="p-2 text-center">Activo</th>
               <th scope="col" className="p-2 text-center">Acciones</th>
@@ -69,7 +108,7 @@ export default function EmpleadosPage() {
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-muted-foreground">
+                <td colSpan={7} className="p-4 text-center text-muted-foreground">
                   — Sin resultados —
                 </td>
               </tr>
@@ -85,6 +124,21 @@ export default function EmpleadosPage() {
                       <Clock className="size-4 text-muted-foreground" />
                     )}
                     <span>{col.schedule.days} · {col.schedule.startTime}</span>
+                  </td>
+                  <td className="p-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(col.tags ?? []).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          title={`Filtrar por "${t}"`}
+                          onClick={() => { setTagFilter(t); setTagFilterRaw(t); setPage(1) }}
+                          className="rounded-full bg-secondary px-2 py-0.5 text-xs hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
                   </td>
                   <td className="p-2">
                     <div className="flex flex-wrap gap-1">

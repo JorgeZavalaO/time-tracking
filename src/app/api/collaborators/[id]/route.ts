@@ -2,10 +2,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"           
-import { auth } from "@/lib/auth";
+import { Prisma, AuditStatus } from "@prisma/client"
 import { hash } from "bcryptjs";
 import { z } from "zod";
+import { requireRole, Permissions } from "@/lib/auth-guard"
+import { logAudit } from "@/lib/audit"
 
 // Utilidad pequeña para convertir string → número y validar
 function toValidInt(value: string): number | null {
@@ -19,127 +20,148 @@ const putSchema = z.object({
   isBlocked: z.boolean().optional(),
   pin: z.string().regex(/^\d{4,8}$/).optional(),
   scheduleSpecialId: z.number().int().positive().nullable().optional(),
+  // RRHH (Sprint 3)
+  position: z.string().max(100).nullable().optional(),
+  hireDate: z.string().datetime().nullable().optional(),
+  salary: z.number().positive().nullable().optional(),
+  paymentType: z.enum(["MONTHLY", "BIWEEKLY", "WEEKLY"]).nullable().optional(),
+  tags: z.array(z.string().max(50)).optional(),
 })
-
-async function requireAdmin() {
-  const session = await auth()
-  if (!session?.user?.id) return null
-
-  const user = await prisma.user.findUnique({
-    where: { id: Number(session.user.id) },
-    select: { id: true, role: true },
-  })
-
-  if (!user || user.role !== "admin") return null
-  return user
-}
 
 // @ts-expect-error Next.js App Router context type
 // PUT ▸ Actualizar un colaborador
 export async function PUT(req: NextRequest, context) {
   try {
-    const admin = await requireAdmin()
-    if (!admin) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const authResult = await requireRole(...Permissions.COLLABORATOR_WRITE)
+    if (!authResult.ok) return authResult.response
 
-    // 1. Validar el ID recibido en la URL 
     const id = toValidInt(context.params.id);
     if (id === null) {
       return NextResponse.json(
-        { message: "ID inválido: debe ser un entero positivo" },
+        { error: "ID inválido: debe ser un entero positivo", code: "INVALID_ID" },
         { status: 400 }
       );
     }
 
-    // 2. Leer y validar el cuerpo (body)
-    const { name, active, isBlocked, scheduleSpecialId, pin } = putSchema.parse(await req.json());
+    const { name, active, isBlocked, scheduleSpecialId, pin, position, hireDate, salary, paymentType, tags } = putSchema.parse(await req.json());
 
     if (scheduleSpecialId) {
-        const exists = await prisma.schedule.findUnique({ 
-            where:{ id:scheduleSpecialId } 
-        })
+        const exists = await prisma.schedule.findUnique({ where:{ id:scheduleSpecialId } })
         if (!exists) return NextResponse.json(
-            { error:"Horario especial inexistente" },
+            { error:"Horario especial inexistente", code: "SCHEDULE_NOT_FOUND" },
             { status:400 }
         )
     }
 
+    // Snapshot before para auditoría
+    const before = await prisma.collaborator.findUnique({
+      where: { id },
+      select: { name: true, active: true, is_blocked: true, scheduleSpecialId: true },
+    })
+
     const updated = await prisma.collaborator.update({
         where:{ id },
-        data :{
+        data:{
           name,
           active: active ?? undefined,
           is_active: active ?? undefined,
           is_blocked: isBlocked ?? undefined,
           pin_hash: pin ? await hash(pin, 10) : undefined,
           scheduleSpecialId: scheduleSpecialId ?? null,
+          position: position !== undefined ? position : undefined,
+          hireDate: hireDate !== undefined ? (hireDate ? new Date(hireDate) : null) : undefined,
+          salary: salary !== undefined ? salary : undefined,
+          paymentType: paymentType !== undefined ? paymentType : undefined,
+          tags: tags !== undefined ? tags : undefined,
         },
         include:{ scheduleSpecial:true },
       })
 
-      return NextResponse.json(updated)
+    await logAudit({
+      actorId: authResult.userId,
+      actorRole: authResult.role,
+      action: pin ? "PIN_CHANGE" : "UPDATE",
+      resource: "COLLABORATOR",
+      resourceId: id,
+      status: AuditStatus.SUCCESS,
+      before,
+      after: { name: updated.name, active: updated.active, is_blocked: updated.is_blocked, scheduleSpecialId: updated.scheduleSpecialId },
+    })
+
+    return NextResponse.json(updated)
 
   } catch (error: unknown) {
-    // 5. Manejo fino de errores 
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025" // "Record to update not found."
+      error.code === "P2025"
     ) {
       return NextResponse.json(
-        { message: "Colaborador no encontrado" },
+        { error: "Colaborador no encontrado", code: "NOT_FOUND" },
         { status: 404 }
       );
     }
 
     console.error("PUT /collaborators/[id] error:", error);
     return NextResponse.json(
-      { message: "Error inesperado al actualizar" },
+      { error: "Error inesperado al actualizar", code: "INTERNAL_ERROR" },
       { status: 500 }
     );
   }
 }
 
 // @ts-expect-error Next.js App Router context type
-// DELETE ▸ Eliminar un colaborador 
+// DELETE ▸ Eliminar un colaborador
 export async function DELETE(req: NextRequest, context) {
   try {
-    const admin = await requireAdmin()
-    if (!admin) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const authResult = await requireRole(...Permissions.COLLABORATOR_DELETE)
+    if (!authResult.ok) return authResult.response
 
-    // 1. Validar el ID 
     const id = toValidInt(context.params.id);
     if (id === null) {
       return NextResponse.json(
-        { message: "ID inválido: debe ser un entero positivo" },
+        { error: "ID inválido: debe ser un entero positivo", code: "INVALID_ID" },
         { status: 400 }
       );
     }
 
-    // 2. Eliminar el registro 
+    // Snapshot before para auditoría
+    const before = await prisma.collaborator.findUnique({
+      where: { id },
+      select: { dni: true, name: true, active: true },
+    })
+
     await prisma.collaborator.delete({ where: { id } });
 
-    // 3. Confirmar éxito 
-    return NextResponse.json({ message: "Colaborador eliminado" }); // 200 OK
+    await logAudit({
+      actorId: authResult.userId,
+      actorRole: authResult.role,
+      action: "DELETE",
+      resource: "COLLABORATOR",
+      resourceId: id,
+      status: AuditStatus.SUCCESS,
+      before,
+    })
+
+    return NextResponse.json({ message: "Colaborador eliminado" });
   } catch (error: unknown) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025" // "Record to delete not found."
+      error.code === "P2025"
     ) {
       return NextResponse.json(
-        { message: "Colaborador no encontrado" },
+        { error: "Colaborador no encontrado", code: "NOT_FOUND" },
         { status: 404 }
       );
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && 
-        error.code==="P2014")  // foreign-key restriction
-    return NextResponse.json({ error:"Tiene registros de asistencia; desactívelo en lugar de borrarlo." },{ status:409 })
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2014")
+      return NextResponse.json(
+        { error: "Tiene registros de asistencia; desactívelo en lugar de borrarlo.", code: "HAS_ACCESSES" },
+        { status: 409 }
+      )
 
     console.error("DELETE /collaborators/[id] error:", error);
     return NextResponse.json(
-      { message: "Error inesperado al eliminar" },
+      { error: "Error inesperado al eliminar", code: "INTERNAL_ERROR" },
       { status: 500 }
     );
   }

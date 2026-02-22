@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import dayjs from "dayjs";
 import { prisma } from "@/lib/prisma";
 import type { AccessStatus } from "@prisma/client";
+import { AuditStatus } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 import { uploadSelfieFromDataUrl } from "@/lib/storage";
+import { logAudit } from "@/lib/audit";
 
 const bodySchema = z
   .object({
@@ -51,10 +53,25 @@ export default async function handler(req: NextRequest) {
   }
 
   if (!collaborator) {
+    await logAudit({
+      action: "ACCESS_DENIED",
+      resource: "ACCESS",
+      status: AuditStatus.DENIED,
+      error: "Colaborador no encontrado",
+      metadata: { method: payload.method, dniFrag: payload.dni?.slice(-4), ip: req.headers.get("x-forwarded-for") },
+    })
     return NextResponse.json({ message: "Colaborador no encontrado" }, { status: 404 });
   }
 
   if (!collaborator.active || !collaborator.is_active || collaborator.is_blocked) {
+    await logAudit({
+      action: "ACCESS_DENIED",
+      resource: "ACCESS",
+      resourceId: collaborator.id,
+      status: AuditStatus.DENIED,
+      error: collaborator.is_blocked ? "Colaborador bloqueado" : "Colaborador inactivo",
+      metadata: { collaboratorId: collaborator.id, method: payload.method },
+    })
     return NextResponse.json({ message: "Colaborador inactivo o bloqueado" }, { status: 403 });
   }
 
@@ -64,6 +81,14 @@ export default async function handler(req: NextRequest) {
 
   const pinOk = await compare(payload.pin, collaborator.pin_hash);
   if (!pinOk) {
+    await logAudit({
+      action: "ACCESS_DENIED",
+      resource: "ACCESS",
+      resourceId: collaborator.id,
+      status: AuditStatus.DENIED,
+      error: "PIN inválido",
+      metadata: { collaboratorId: collaborator.id, method: payload.method },
+    })
     return NextResponse.json({ message: "PIN inválido" }, { status: 401 });
   }
 
@@ -99,15 +124,24 @@ export default async function handler(req: NextRequest) {
     return NextResponse.json({ message: "Ya registraste tu entrada" }, { status: 409 });
   }
 
-  // 5) Calcular si llegó tarde
+  // 5) Calcular si llegó tarde (lee tolerancia de CompanySettings)
   const [h, m] = schedule.startTime.split(":").map(Number);
   const cutoff = dayjs().hour(h).minute(m).second(0);
   const now = dayjs();
-  const status = (now.isAfter(cutoff) ? "LATE" : "ON_TIME") as AccessStatus;
+
+  // Leer configuración de empresa (silencioso si falla — usa defaults)
+  let lateTolerance = 0;
+  try {
+    const settings = await prisma.companySettings.findUnique({ where: { id: 1 } });
+    lateTolerance = settings?.lateTolerance ?? 0;
+  } catch { /* usa 0 si settings aún no existe */ }
+
+  const cutoffWithTolerance = cutoff.add(lateTolerance, "minute");
+  const status = (now.isAfter(cutoffWithTolerance) ? "LATE" : "ON_TIME") as AccessStatus;
 
   let suspiciousReason: string | null = null;
   let confidenceFlag = false;
-  const minutesLate = now.diff(cutoff, "minute");
+  const minutesLate = now.diff(cutoffWithTolerance, "minute");
   if (minutesLate > 120) {
     suspiciousReason = "Fuera de turno extremo";
     confidenceFlag = true;
@@ -144,6 +178,21 @@ export default async function handler(req: NextRequest) {
       confidence_flag: confidenceFlag,
     },
   });
+
+  await logAudit({
+    action: "ACCESS_ATTEMPT",
+    resource: "ACCESS",
+    resourceId: access.id,
+    status: AuditStatus.SUCCESS,
+    after: {
+      collaboratorId: collaborator.id,
+      accessStatus: status,
+      method: payload.method,
+      minutesLate: status === "LATE" ? minutesLate : 0,
+      suspicious: confidenceFlag,
+    },
+    metadata: { ip, device_fingerprint: payload.device_fingerprint ?? null },
+  })
 
   return NextResponse.json(
     {

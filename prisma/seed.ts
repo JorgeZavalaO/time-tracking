@@ -1,4 +1,4 @@
-import { PrismaClient, AccessStatus, ScheduleType } from "@prisma/client";
+import { PrismaClient, AccessStatus, ScheduleType, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -24,7 +24,7 @@ async function main() {
       email: "admin@example.com",
       password: hashed,
       name: "Administrador Seed",
-      role: "admin",
+      role: Role.ADMIN,
     },
   });
 

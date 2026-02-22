@@ -13,6 +13,11 @@ export function useSaveCollaborator(
         scheduleSpecialId?: number | null
         pin?: string
         isBlocked?: boolean
+        position?: string | null
+        hireDate?: string | null
+        salary?: number | null
+        paymentType?: 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY' | null
+        tags?: string[]
       },
     ) => {
       const url = payload.id
