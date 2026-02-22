@@ -11,6 +11,8 @@ export type CompanySettings = {
   overtimeBeforeMinutes: number
   overtimeAfterMinutes: number
   overtimeRoundMinutes: number
+  overtimeFactor: number
+  workdayHours: number
   lunchDurationMinutes: number
   lunchDeductionType: "FIXED" | "REAL_TIME"
   lunchRequired: boolean

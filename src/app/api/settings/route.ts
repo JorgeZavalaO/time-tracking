@@ -19,6 +19,8 @@ const settingsSchema = z.object({
   overtimeBeforeMinutes:  z.number().int().min(0).max(120).optional(),
   overtimeAfterMinutes:   z.number().int().min(0).max(480).optional(),
   overtimeRoundMinutes:   z.number().int().min(1).max(60).optional(),
+  overtimeFactor:         z.number().min(1).max(5).optional(),
+  workdayHours:           z.number().int().min(1).max(24).optional(),
   lunchDurationMinutes:   z.number().int().min(0).max(180).optional(),
   lunchDeductionType:     z.enum(["FIXED", "REAL_TIME"]).optional(),
   lunchRequired:          z.boolean().optional(),

@@ -12,6 +12,7 @@ const bodySchema = z.object({
     .array(z.enum(["MON","TUE","WED","THU","FRI","SAT","SUN"]))
     .min(1, "Seleccione al menos un día"),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "formato HH:mm (24h)"),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, "formato HH:mm (24h)").optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   const where = typeParam ? { type: typeParam } : {};
   const list = await prisma.schedule.findMany({
     where,
-    select: { id: true, type: true, days: true, startTime: true },
+    select: { id: true, type: true, days: true, startTime: true, endTime: true },
     orderBy: { id: "asc" },
   });
   return NextResponse.json(list);
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       type: data.type,
       days: data.days,
       startTime: data.startTime,
+      endTime: data.endTime ?? null,
     },
   });
 

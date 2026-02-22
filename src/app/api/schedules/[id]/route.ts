@@ -12,6 +12,7 @@ const bodySchema = z.object({
     .min(1)
     .optional(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
 });
 
 export async function PUT(req: NextRequest, ctx: unknown) {
@@ -45,6 +46,7 @@ export async function PUT(req: NextRequest, ctx: unknown) {
   if (data.type) updateData.type = data.type;
   if (data.days) updateData.days = data.days;
   if (data.startTime) updateData.startTime = data.startTime;
+  if ("endTime" in data) updateData.endTime = data.endTime ?? null;
 
   // Guardar schedule + historial enriquecido en transacción
   const [updated] = await prisma.$transaction([

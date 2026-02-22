@@ -1,6 +1,6 @@
 "use client"
 
-import { Calendar, Home, UserRound, Search, Settings, ClipboardList } from "lucide-react"
+import { Calendar, Home, UserRound, Search, Settings, ClipboardList, FileSpreadsheet, Lock } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { useSession } from "next-auth/react"
@@ -54,6 +54,18 @@ const MenuAlmacen = [
     title: "Correcciones",
     url: "/correcciones",
     icon: ClipboardList,
+    roles: WRITE_ROLES,
+  },
+  {
+    title: "Planilla",
+    url: "/planilla",
+    icon: FileSpreadsheet,
+    roles: WRITE_ROLES,
+  },
+  {
+    title: "Cierre",
+    url: "/cierre",
+    icon: Lock,
     roles: WRITE_ROLES,
   },
   {

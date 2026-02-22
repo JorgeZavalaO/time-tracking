@@ -20,6 +20,8 @@ const schema = z.object({
   overtimeBeforeMinutes: z.coerce.number().int().min(0).max(120),
   overtimeAfterMinutes:  z.coerce.number().int().min(0).max(480),
   overtimeRoundMinutes:  z.coerce.number().int().min(1).max(60),
+  overtimeFactor:        z.coerce.number().min(1).max(5),
+  workdayHours:          z.coerce.number().int().min(1).max(24),
   lunchDurationMinutes:  z.coerce.number().int().min(0).max(180),
   lunchDeductionType:    z.enum(['FIXED', 'REAL_TIME']),
   lunchRequired:         z.boolean(),
@@ -47,6 +49,8 @@ function toForm(s: CompanySettings): FormData {
     overtimeBeforeMinutes: s.overtimeBeforeMinutes,
     overtimeAfterMinutes:  s.overtimeAfterMinutes,
     overtimeRoundMinutes:  s.overtimeRoundMinutes,
+    overtimeFactor:        s.overtimeFactor,
+    workdayHours:          s.workdayHours,
     lunchDurationMinutes:  s.lunchDurationMinutes,
     lunchDeductionType:    s.lunchDeductionType,
     lunchRequired:         s.lunchRequired,
@@ -83,6 +87,8 @@ export function SettingsForm() {
       overtimeBeforeMinutes: 0,
       overtimeAfterMinutes: 0,
       overtimeRoundMinutes: 15,
+      overtimeFactor: 1.5,
+      workdayHours: 8,
       lunchDurationMinutes: 60,
       lunchDeductionType: 'FIXED',
       lunchRequired: false,
@@ -207,6 +213,16 @@ export function SettingsForm() {
             <div>
               <Label htmlFor="overtimeRoundMinutes">Redondeo (minutos)</Label>
               <Input id="overtimeRoundMinutes" type="number" min={1} max={60} {...register('overtimeRoundMinutes')} />
+            </div>
+            <div>
+              <Label htmlFor="overtimeFactor">Factor multiplicador (ej. 1.5)</Label>
+              <Input id="overtimeFactor" type="number" min={1} max={5} step={0.25} {...register('overtimeFactor')} />
+              <p className="text-muted-foreground text-xs mt-1">Pagado × factor sobre la tarifa/hora normal.</p>
+            </div>
+            <div>
+              <Label htmlFor="workdayHours">Horas de jornada estándar</Label>
+              <Input id="workdayHours" type="number" min={1} max={24} {...register('workdayHours')} />
+              <p className="text-muted-foreground text-xs mt-1">Usado para calcular la tarifa/hora del colaborador.</p>
             </div>
           </div>
         )}

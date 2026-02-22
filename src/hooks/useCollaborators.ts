@@ -4,6 +4,7 @@ export type Schedule = {
     id: number
     type: 'GENERAL' | 'SPECIAL'
     startTime: string
+    endTime?: string | null
     days: string
   }
 

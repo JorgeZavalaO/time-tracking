@@ -26,6 +26,10 @@ const schema = z.object({
     .array(z.enum(['MON','TUE','WED','THU','FRI','SAT','SUN']))
     .min(1, 'Seleccione al menos un día'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  endTime: z.string().optional().nullable().refine(
+    (v) => !v || /^\d{2}:\d{2}$/.test(v),
+    { message: 'Formato HH:mm' }
+  ),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -40,11 +44,13 @@ export function ScheduleForm({ initialData }: { initialData?: Partial<FormData> 
             type: initialData.type!,
             days: initialData.days!,
             startTime: initialData.startTime!,
+            endTime: initialData.endTime ?? null,
           }
         : {
             type: 'GENERAL',
             days: ['MON','TUE','WED','THU','FRI'],
             startTime: '08:30',
+            endTime: null,
           },
     });
 
@@ -53,6 +59,7 @@ export function ScheduleForm({ initialData }: { initialData?: Partial<FormData> 
       { 
         ...data,
         days: data.days.join(','),
+        endTime: data.endTime || null,  // normaliza '' → null
       },
       {
         onSuccess: () => {
@@ -77,8 +84,7 @@ export function ScheduleForm({ initialData }: { initialData?: Partial<FormData> 
             id: initialData.id,
             type: initialData.type!,
             days: initialData.days!,
-            startTime: initialData.startTime!,
-          });
+            startTime: initialData.startTime!,            endTime: initialData.endTime ?? null,          });
         }
       }}
     >
@@ -132,6 +138,19 @@ export function ScheduleForm({ initialData }: { initialData?: Partial<FormData> 
             {errors.startTime && (
               <p className="text-sm text-destructive">
                 {errors.startTime.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label>Hora fin (HH:mm) <span className="text-muted-foreground text-xs">(opcional, para H.E. al final)</span></Label>
+            <Input
+              {...register('endTime')}
+              placeholder="17:30"
+            />
+            {errors.endTime && (
+              <p className="text-sm text-destructive">
+                {errors.endTime.message}
               </p>
             )}
           </div>

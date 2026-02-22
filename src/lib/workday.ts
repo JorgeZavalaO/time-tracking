@@ -78,7 +78,7 @@ export function calculateWorkday(
     | "overtimeAfterMinutes"
     | "overtimeRoundMinutes"
   >,
-  schedule: Pick<Schedule, "startTime">,
+  schedule: Pick<Schedule, "startTime" | "endTime">,
 ): WorkdaySummary {
   const sorted = [...marks].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
@@ -148,14 +148,17 @@ export function calculateWorkday(
   // ── Horas extra ───────────────────────────────────────────────────────────
   let overtimeMinutes = 0
   if (settings.overtimeEnabled && entryTime && exitTime) {
-    const ref         = entryTime
-    const schedStart  = timeToday(schedule.startTime, ref)
-    // Estrictamente: horas extra = tiempo que excede lo esperado
-    // Simplificamos: overtime = max(0, netMinutes - 480) pero usando los parámetros
+    const ref        = entryTime
+    const schedStart = timeToday(schedule.startTime, ref)
+    // Horas extra ANTES del turno
     const earlyMinutes = Math.max(0, schedStart.diff(entryTime, "minute") - settings.overtimeBeforeMinutes)
-    // Para horas extra al final necesitaríamos el endTime del schedule (no existe aún)
-    // Por ahora solo contamos early overtime
-    const raw = earlyMinutes
+    // Horas extra DESPUÉS del turno (requiere endTime en el horario)
+    let lateMinutes = 0
+    if (schedule.endTime) {
+      const schedEnd = timeToday(schedule.endTime, ref)
+      lateMinutes = Math.max(0, exitTime.diff(schedEnd, "minute") - settings.overtimeAfterMinutes)
+    }
+    const raw = earlyMinutes + lateMinutes
     overtimeMinutes = roundDown(raw, settings.overtimeRoundMinutes)
   }
 
