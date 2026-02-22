@@ -1,6 +1,6 @@
 "use client"
 
-import { Calendar, Home, UserRound, Search, Settings } from "lucide-react"
+import { Calendar, Home, UserRound, Search, Settings, ClipboardList } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { useSession } from "next-auth/react"
@@ -49,6 +49,12 @@ const MenuAlmacen = [
     url: "/registros",
     icon: Search,
     roles: ALL_ROLES,
+  },
+  {
+    title: "Correcciones",
+    url: "/correcciones",
+    icon: ClipboardList,
+    roles: WRITE_ROLES,
   },
   {
     title: "Configuración",

@@ -21,6 +21,16 @@ const settingsSchema = z.object({
   overtimeRoundMinutes:   z.number().int().min(1).max(60).optional(),
   lunchDurationMinutes:   z.number().int().min(0).max(180).optional(),
   lunchDeductionType:     z.enum(["FIXED", "REAL_TIME"]).optional(),
+  lunchRequired:          z.boolean().optional(),
+  // Ventanas de marcación (Sprint 5)
+  entryWindowStart:       z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  entryWindowEnd:         z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  lunchWindowStart:       z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  lunchWindowEnd:         z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  exitWindowStart:        z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  exitWindowEnd:          z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  maxMarksPerDay:         z.number().int().min(2).max(10).optional(),
+  lunchSkipHours:         z.number().int().min(1).max(12).optional(),
 })
 
 /** Obtiene o crea el singleton de configuración */

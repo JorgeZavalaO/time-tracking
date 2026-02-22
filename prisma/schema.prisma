@@ -52,6 +52,14 @@ enum LunchDeductionType {
   REAL_TIME
 }
 
+enum MarkType {
+  ENTRY
+  LUNCH_OUT
+  LUNCH_IN
+  EXIT
+  INCIDENCE
+}
+
 model User {
   id                   Int                @id @default(autoincrement())
   email                String             @unique
@@ -108,6 +116,10 @@ model Access {
   photo_url         String?
   suspicious_reason String?
   confidence_flag   Boolean    @default(false)
+
+  // Tipo de marcación automática (Sprint 5)
+  markType         MarkType        @default(ENTRY)
+  minutesLate      Int?            // minutos de tardanza (solo ENTRY, null si no aplica)
 
   // Justificación opcional
   justification     Justification?
@@ -192,6 +204,16 @@ model CompanySettings {
   // Almuerzo
   lunchDurationMinutes  Int                 @default(60)
   lunchDeductionType    LunchDeductionType  @default(FIXED)
+  lunchRequired         Boolean             @default(false)
+  // Ventanas de marcación (Sprint 5)
+  entryWindowStart      String              @default("05:00")
+  entryWindowEnd        String              @default("11:00")
+  lunchWindowStart      String              @default("11:00")
+  lunchWindowEnd        String              @default("15:30")
+  exitWindowStart       String              @default("15:00")
+  exitWindowEnd         String              @default("23:00")
+  maxMarksPerDay        Int                 @default(4)
+  lunchSkipHours        Int                 @default(4)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 }

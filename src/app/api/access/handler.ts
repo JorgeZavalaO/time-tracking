@@ -1,12 +1,118 @@
 import { NextRequest, NextResponse } from "next/server";
 import dayjs from "dayjs";
 import { prisma } from "@/lib/prisma";
-import type { AccessStatus } from "@prisma/client";
+import type { AccessStatus, CompanySettings, MarkType } from "@prisma/client";
 import { AuditStatus } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 import { uploadSelfieFromDataUrl } from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Convierte "HH:mm" al mismo día que `ref` y devuelve un Dayjs. */
+function timeToday(hhmm: string, ref: dayjs.Dayjs): dayjs.Dayjs {
+  const [h, m] = hhmm.split(":").map(Number);
+  return ref.hour(h).minute(m).second(0).millisecond(0);
+}
+
+/** true si `t` está en la ventana [start, end] (inclusive). */
+function inWindow(t: dayjs.Dayjs, start: string, end: string, ref: dayjs.Dayjs): boolean {
+  return !t.isBefore(timeToday(start, ref)) && !t.isAfter(timeToday(end, ref));
+}
+
+// ─── Clasificación automática ────────────────────────────────────────────────
+
+type AccessRow = { markType: MarkType; timestamp: Date };
+type ClassifyResult = {
+  markType: MarkType;
+  nextExpected: string | null;
+  note: string | null;
+};
+
+export const MARK_LABELS: Record<MarkType, string> = {
+  ENTRY:     "Entrada",
+  LUNCH_OUT: "Salida a almuerzo",
+  LUNCH_IN:  "Regreso de almuerzo",
+  EXIT:      "Salida",
+  INCIDENCE: "Incidencia",
+};
+
+export function classifyMark(
+  todayMarks: AccessRow[],
+  settings: Pick<
+    CompanySettings,
+    | "entryWindowStart" | "entryWindowEnd"
+    | "lunchWindowStart" | "lunchWindowEnd"
+    | "exitWindowStart"  | "exitWindowEnd"
+    | "maxMarksPerDay"   | "lunchSkipHours"
+  >,
+  now: dayjs.Dayjs,
+): ClassifyResult {
+  const count = todayMarks.length;
+
+  // Demasiadas marcaciones → INCIDENCE
+  if (count >= settings.maxMarksPerDay) {
+    return { markType: "INCIDENCE", nextExpected: null, note: "Máximo de marcaciones diarias alcanzado" };
+  }
+
+  // Sin marcaciones → ENTRY
+  if (count === 0) {
+    return { markType: "ENTRY", nextExpected: "Salida a almuerzo", note: null };
+  }
+
+  const lastMark = todayMarks[count - 1];
+  const lastType = lastMark.markType;
+
+  // Tras ENTRY
+  if (lastType === "ENTRY") {
+    if (inWindow(now, settings.lunchWindowStart, settings.lunchWindowEnd, now)) {
+      return { markType: "LUNCH_OUT", nextExpected: "Regreso de almuerzo", note: null };
+    }
+    if (inWindow(now, settings.exitWindowStart, settings.exitWindowEnd, now)) {
+      return {
+        markType: "EXIT",
+        nextExpected: null,
+        note: "Almuerzo no registrado — se aplicará deducción por política",
+      };
+    }
+    // Fuera de ventanas → asumir almuerzo por cercanía temporal
+    return { markType: "LUNCH_OUT", nextExpected: "Regreso de almuerzo", note: null };
+  }
+
+  // Tras LUNCH_OUT
+  if (lastType === "LUNCH_OUT") {
+    const elapsedHours = now.diff(dayjs(lastMark.timestamp), "hour", true);
+    if (elapsedHours >= settings.lunchSkipHours) {
+      // Caso B flexible: demasiado tiempo → tomar como SALIDA
+      return {
+        markType: "EXIT",
+        nextExpected: null,
+        note: "Almuerzo incompleto — regreso no registrado",
+      };
+    }
+    return { markType: "LUNCH_IN", nextExpected: "Salida", note: null };
+  }
+
+  // Tras LUNCH_IN → EXIT
+  if (lastType === "LUNCH_IN") {
+    return { markType: "EXIT", nextExpected: null, note: null };
+  }
+
+  // Tras EXIT (jornada cerrada) → INCIDENCE
+  if (lastType === "EXIT") {
+    return {
+      markType: "INCIDENCE",
+      nextExpected: null,
+      note: "Jornada ya cerrada — marcación adicional registrada como incidencia",
+    };
+  }
+
+  // Tras INCIDENCE → otra incidencia
+  return { markType: "INCIDENCE", nextExpected: null, note: "Marcación adicional" };
+}
+
+// ─── Schema de validación ────────────────────────────────────────────────────
 
 const bodySchema = z
   .object({
@@ -15,17 +121,18 @@ const bodySchema = z
     qr_token: z.string().optional(),
     pin: z.string().regex(/^\d{4,8}$/),
     device_fingerprint: z.string().max(255).optional(),
-    // kiosk_id and kiosk_secret removed: kiosk authentication handled server-side / not required for now
     selfie_data_url: z.string().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.method === "DNI" && !val.dni) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "dni es requerido para method DNI" })
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "dni es requerido para method DNI" });
     }
     if (val.method === "QR" && !val.qr_token) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "qr_token es requerido para method QR" })
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "qr_token es requerido para method QR" });
     }
-  })
+  });
+
+// ─── Handler principal ───────────────────────────────────────────────────────
 
 export default async function handler(req: NextRequest) {
   if (req.method !== "POST") {
@@ -33,10 +140,12 @@ export default async function handler(req: NextRequest) {
   }
 
   const payload = bodySchema.parse(await req.json());
-  // Kiosk authentication disabled for now; requests are accepted without kiosk_id/secret.
-  // NOTE: This reduces security; consider restoring kiosk verification before production.
 
-  // 1) Buscar colaborador
+  if (payload.method === "DNI" && !/^\d{8}$/.test(payload.dni!.trim())) {
+    return NextResponse.json({ message: "DNI inválido" }, { status: 400 });
+  }
+
+  // 1. Buscar colaborador
   const collaborator =
     payload.method === "DNI"
       ? await prisma.collaborator.findUnique({
@@ -48,10 +157,6 @@ export default async function handler(req: NextRequest) {
           include: { scheduleSpecial: true },
         });
 
-  if (payload.method === "DNI" && !/^\d{8}$/.test(payload.dni!.trim())) {
-    return NextResponse.json({ message: "DNI inválido" }, { status: 400 });
-  }
-
   if (!collaborator) {
     await logAudit({
       action: "ACCESS_DENIED",
@@ -59,7 +164,7 @@ export default async function handler(req: NextRequest) {
       status: AuditStatus.DENIED,
       error: "Colaborador no encontrado",
       metadata: { method: payload.method, dniFrag: payload.dni?.slice(-4), ip: req.headers.get("x-forwarded-for") },
-    })
+    });
     return NextResponse.json({ message: "Colaborador no encontrado" }, { status: 404 });
   }
 
@@ -71,7 +176,7 @@ export default async function handler(req: NextRequest) {
       status: AuditStatus.DENIED,
       error: collaborator.is_blocked ? "Colaborador bloqueado" : "Colaborador inactivo",
       metadata: { collaboratorId: collaborator.id, method: payload.method },
-    })
+    });
     return NextResponse.json({ message: "Colaborador inactivo o bloqueado" }, { status: 403 });
   }
 
@@ -88,68 +193,82 @@ export default async function handler(req: NextRequest) {
       status: AuditStatus.DENIED,
       error: "PIN inválido",
       metadata: { collaboratorId: collaborator.id, method: payload.method },
-    })
+    });
     return NextResponse.json({ message: "PIN inválido" }, { status: 401 });
   }
 
-  // 2) Detección del día de hoy
-  const today = dayjs().format("ddd").toUpperCase().slice(0, 3); // “MON”, “TUE”, …
-
-  // 3) Elegir horario: si el special aplica hoy, uso ese, si no busco general que incluya today
+  // 2. Detectar día y horario
+  const today = dayjs().format("ddd").toUpperCase().slice(0, 3); // "MON", "TUE", …
   const schedule =
-    collaborator.scheduleSpecial?.days.includes(today) ||
-    false
+    collaborator.scheduleSpecial?.days.includes(today)
       ? collaborator.scheduleSpecial
       : await prisma.schedule.findFirst({
-          where: {
-            type: "GENERAL",
-            days: { has: today },
-          },
+          where: { type: "GENERAL", days: { has: today } },
         });
 
   if (!schedule) {
-    return NextResponse.json({ message: "Horario aun no configurado" }, { status: 500 });
+    return NextResponse.json({ message: "Horario aún no configurado" }, { status: 500 });
   }
 
-  // 4) Evitar duplicados en el mismo día
+  // 3. Leer configuración global (con fallback a defaults)
+  const settings = await prisma.companySettings.findUnique({ where: { id: 1 } }).catch(() => null);
+  const cfg = {
+    lateTolerance:    settings?.lateTolerance    ?? 0,
+    entryWindowStart: settings?.entryWindowStart ?? "05:00",
+    entryWindowEnd:   settings?.entryWindowEnd   ?? "11:00",
+    lunchWindowStart: settings?.lunchWindowStart ?? "11:00",
+    lunchWindowEnd:   settings?.lunchWindowEnd   ?? "15:30",
+    exitWindowStart:  settings?.exitWindowStart  ?? "15:00",
+    exitWindowEnd:    settings?.exitWindowEnd    ?? "23:00",
+    maxMarksPerDay:   settings?.maxMarksPerDay   ?? 4,
+    lunchSkipHours:   settings?.lunchSkipHours   ?? 4,
+  };
+
+  // 4. Marcaciones del colaborador en el día actual
   const startDay = dayjs().startOf("day").toDate();
-  const endDay = dayjs().endOf("day").toDate();
-  const existing = await prisma.access.findFirst({
-    where: {
-      collaboratorId: collaborator.id,
-      timestamp: { gte: startDay, lte: endDay },
-    },
+  const endDay   = dayjs().endOf("day").toDate();
+  const todayMarks = await prisma.access.findMany({
+    where: { collaboratorId: collaborator.id, timestamp: { gte: startDay, lte: endDay } },
+    select: { markType: true, timestamp: true },
+    orderBy: { timestamp: "asc" },
   });
-  if (existing) {
-    return NextResponse.json({ message: "Ya registraste tu entrada" }, { status: 409 });
-  }
 
-  // 5) Calcular si llegó tarde (lee tolerancia de CompanySettings)
-  const [h, m] = schedule.startTime.split(":").map(Number);
-  const cutoff = dayjs().hour(h).minute(m).second(0);
+  // 5. Clasificar automáticamente
   const now = dayjs();
+  const { markType, nextExpected, note } = classifyMark(todayMarks, cfg, now);
 
-  // Leer configuración de empresa (silencioso si falla — usa defaults)
-  let lateTolerance = 0;
-  try {
-    const settings = await prisma.companySettings.findUnique({ where: { id: 1 } });
-    lateTolerance = settings?.lateTolerance ?? 0;
-  } catch { /* usa 0 si settings aún no existe */ }
+  // 6. Calcular tardanza (solo para ENTRY)
+  const [hh, mm] = schedule.startTime.split(":").map(Number);
+  const cutoff = now.hour(hh).minute(mm).second(0);
+  const cutoffWithTolerance = cutoff.add(cfg.lateTolerance, "minute");
+  const status = (
+    markType === "ENTRY"
+      ? now.isAfter(cutoffWithTolerance) ? "LATE" : "ON_TIME"
+      : "ON_TIME"
+  ) as AccessStatus;
 
-  const cutoffWithTolerance = cutoff.add(lateTolerance, "minute");
-  const status = (now.isAfter(cutoffWithTolerance) ? "LATE" : "ON_TIME") as AccessStatus;
+  // Valor numérico de tardanza (positivo = tarde, 0 = a tiempo)
+  const minutesLateRaw = markType === "ENTRY"
+    ? Math.max(0, now.diff(cutoffWithTolerance, "minute"))
+    : null;
 
   let suspiciousReason: string | null = null;
   let confidenceFlag = false;
-  const minutesLate = now.diff(cutoffWithTolerance, "minute");
-  if (minutesLate > 120) {
+
+  if (markType === "ENTRY" && minutesLateRaw !== null && minutesLateRaw > 120) {
     suspiciousReason = "Fuera de turno extremo";
     confidenceFlag = true;
+  }
+
+  if (markType === "INCIDENCE") {
+    confidenceFlag = true;
+    suspiciousReason = note ?? "Incidencia de marcación";
   }
 
   const ipRaw = req.headers.get("x-forwarded-for") ?? "";
   const ip = ipRaw.split(",")[0]?.trim() || null;
 
+  // 7. Selfie opcional
   let photoUrl: string | null = null;
   if (payload.selfie_data_url) {
     try {
@@ -166,16 +285,18 @@ export default async function handler(req: NextRequest) {
     }
   }
 
-  // 6) Crear registro
+  // 8. Crear registro
   const access = await prisma.access.create({
     data: {
-      collaboratorId: collaborator.id,
+      collaboratorId:    collaborator.id,
+      markType,
       status,
+      minutesLate:       minutesLateRaw,
       deviceFingerprint: payload.device_fingerprint ?? null,
       ip,
-      photo_url: photoUrl,
+      photo_url:         photoUrl,
       suspicious_reason: suspiciousReason,
-      confidence_flag: confidenceFlag,
+      confidence_flag:   confidenceFlag,
     },
   });
 
@@ -186,22 +307,25 @@ export default async function handler(req: NextRequest) {
     status: AuditStatus.SUCCESS,
     after: {
       collaboratorId: collaborator.id,
+      markType,
       accessStatus: status,
       method: payload.method,
-      minutesLate: status === "LATE" ? minutesLate : 0,
       suspicious: confidenceFlag,
     },
     metadata: { ip, device_fingerprint: payload.device_fingerprint ?? null },
-  })
+  });
 
-  return NextResponse.json(
-    {
-      status: access.status,
-      timestamp: access.timestamp,
-      photo_url: access.photo_url,
-      confidence_flag: access.confidence_flag,
-      suspicious_reason: access.suspicious_reason,
-    },
-    { status: 200 }
-  );
+  return NextResponse.json({
+    markType,
+    markLabel: MARK_LABELS[markType],
+    status:           access.status,
+    timestamp:        access.timestamp,
+    minutesLate:      access.minutesLate,
+    nextExpected,
+    note,
+    photo_url:        access.photo_url,
+    confidence_flag:  access.confidence_flag,
+    suspicious_reason: access.suspicious_reason,
+  });
 }
+

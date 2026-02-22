@@ -12,6 +12,15 @@ import { NumericKeypad } from "@/components/kiosk/NumericKeypad";
 import { QrScanner } from "@/components/kiosk/QrScanner";
 
 type KioskMode = "DNI" | "QR"
+type MarkType = "ENTRY" | "LUNCH_OUT" | "LUNCH_IN" | "EXIT" | "INCIDENCE"
+
+const MARK_STYLE: Record<MarkType, { bg: string; text: string; border: string; label: string; icon: string }> = {
+  ENTRY:     { bg: "bg-emerald-50",  text: "text-emerald-800",  border: "border-emerald-300", label: "ENTRADA",             icon: "\u2705" },
+  LUNCH_OUT: { bg: "bg-sky-50",      text: "text-sky-800",      border: "border-sky-300",     label: "SALIDA A ALMUERZO",  icon: "\uD83C\uDF74" },
+  LUNCH_IN:  { bg: "bg-indigo-50",   text: "text-indigo-800",   border: "border-indigo-300",  label: "REGRESO DE ALMUERZO",icon: "\uD83C\uDF7D\uFE0F" },
+  EXIT:      { bg: "bg-amber-50",    text: "text-amber-800",    border: "border-amber-300",   label: "SALIDA",             icon: "\uD83D\uDEAA" },
+  INCIDENCE: { bg: "bg-red-50",      text: "text-red-800",      border: "border-red-300",     label: "INCIDENCIA",         icon: "\u26A0\uFE0F" },
+}
 
 
 export default function Home(){
@@ -24,7 +33,10 @@ export default function Home(){
   const [focusedField, setFocusedField] = useState<"dni" | "pin" | null>("dni")
   const [selfieDataUrl, setSelfieDataUrl] = useState<string | null>(null)
   const [lastStatus, setLastStatus] = useState<"ok" | "error" | null>(null)
+  const [lastMarkType, setLastMarkType] = useState<MarkType | null>(null)
   const [lastMessage, setLastMessage] = useState("")
+  const [lastNextExpected, setLastNextExpected] = useState<string | null>(null)
+  const [lastNote, setLastNote] = useState<string | null>(null)
   const [error, setError] = useState("")
 
   // removido: no guardamos ni pedimos kioskId / kioskSecret desde UI
@@ -83,22 +95,24 @@ export default function Home(){
 
     const data = await res.json()
     if(!res.ok) {
-      // Mostrar solo el toast y el bloque de estado (lastStatus/lastMessage).
-      // Evitamos setError(...) aquí para no duplicar el mensaje (parrafo + bloque).
       setLastStatus("error")
-      setLastMessage(data.message|| "Ocurrió un error desconocido")
-      toast.error(data.message|| "Ocurrió un error desconocido")
+      setLastMarkType(null)
+      setLastMessage(data.message || "Ocurrió un error desconocido")
+      setLastNextExpected(null)
+      setLastNote(null)
+      toast.error(data.message || "Ocurrió un error desconocido")
       return
     }
 
-    const hora = dayjs(data.timestamp).format("HH:mm:ss")
-    toast.success(
-      data.status === "ON_TIME"
-        ? `Entrada registrada ${hora} (puntual)`
-        : `Entrada registrada ${hora} (tardanza)`
-    )
+    const hora = dayjs(data.timestamp).format("HH:mm")
+    const markType: MarkType = data.markType ?? "ENTRY"
+    const style = MARK_STYLE[markType]
+    toast.success(`${style.icon} ${style.label} — ${hora}`)
     setLastStatus("ok")
-    setLastMessage(data.status === "ON_TIME" ? "Entrada registrada" : "Entrada registrada con tardanza")
+    setLastMarkType(markType)
+    setLastMessage(`${style.label} — ${hora}`)
+    setLastNextExpected(data.nextExpected ?? null)
+    setLastNote(data.note ?? null)
     setDni("")
     setQrToken("")
     setPin("")
@@ -219,11 +233,33 @@ export default function Home(){
 
                   {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
 
-                  {lastStatus ? (
-                    <div className={`rounded-md p-3 text-sm ${lastStatus === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-                      {lastMessage}
+                  {lastStatus === "error" && (
+                    <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800">
+                      <p className="font-semibold">{lastMessage}</p>
                     </div>
-                  ) : null}
+                  )}
+
+                  {lastStatus === "ok" && lastMarkType && (() => {
+                    const style = MARK_STYLE[lastMarkType]
+                    return (
+                      <div className={`rounded-lg border-2 ${style.border} ${style.bg} p-4 space-y-2`}>
+                        <p className={`text-2xl font-bold ${style.text} text-center`}>
+                          {style.icon} {style.label}
+                        </p>
+                        <p className={`text-center text-lg font-semibold ${style.text}`}>{lastMessage.split(" — ")[1]}</p>
+                        {lastNextExpected && (
+                          <p className="text-center text-xs text-muted-foreground mt-1">
+                            Próxima esperada: <span className="font-medium">{lastNextExpected}</span>
+                          </p>
+                        )}
+                        {lastNote && (
+                          <p className="text-center text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1">
+                            {lastNote}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             </CardContent>
@@ -237,7 +273,7 @@ export default function Home(){
                   ? <Clock7 className="animate-spin mr-2" />
                   : <Clock7 className="mr-2" />
                 }
-                {loading ? "Registrando…" : "Registrar marcación"}
+                {loading ? "Registrando…" : "MARCAR"}
               </Button>
             </CardFooter>
           </Card>

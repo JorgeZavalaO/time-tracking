@@ -22,6 +22,16 @@ const schema = z.object({
   overtimeRoundMinutes:  z.coerce.number().int().min(1).max(60),
   lunchDurationMinutes:  z.coerce.number().int().min(0).max(180),
   lunchDeductionType:    z.enum(['FIXED', 'REAL_TIME']),
+  lunchRequired:         z.boolean(),
+  // Ventanas de marcación (Sprint 5)
+  entryWindowStart:      z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  entryWindowEnd:        z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  lunchWindowStart:      z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  lunchWindowEnd:        z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  exitWindowStart:       z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  exitWindowEnd:         z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
+  maxMarksPerDay:        z.coerce.number().int().min(2).max(10),
+  lunchSkipHours:        z.coerce.number().int().min(1).max(12),
 })
 
 type FormData = z.infer<typeof schema>
@@ -39,6 +49,15 @@ function toForm(s: CompanySettings): FormData {
     overtimeRoundMinutes:  s.overtimeRoundMinutes,
     lunchDurationMinutes:  s.lunchDurationMinutes,
     lunchDeductionType:    s.lunchDeductionType,
+    lunchRequired:         s.lunchRequired,
+    entryWindowStart:      s.entryWindowStart,
+    entryWindowEnd:        s.entryWindowEnd,
+    lunchWindowStart:      s.lunchWindowStart,
+    lunchWindowEnd:        s.lunchWindowEnd,
+    exitWindowStart:       s.exitWindowStart,
+    exitWindowEnd:         s.exitWindowEnd,
+    maxMarksPerDay:        s.maxMarksPerDay,
+    lunchSkipHours:        s.lunchSkipHours,
   }
 }
 
@@ -66,6 +85,15 @@ export function SettingsForm() {
       overtimeRoundMinutes: 15,
       lunchDurationMinutes: 60,
       lunchDeductionType: 'FIXED',
+      lunchRequired: false,
+      entryWindowStart: '05:00',
+      entryWindowEnd:   '11:00',
+      lunchWindowStart: '11:00',
+      lunchWindowEnd:   '15:30',
+      exitWindowStart:  '15:00',
+      exitWindowEnd:    '23:00',
+      maxMarksPerDay:   4,
+      lunchSkipHours:   4,
     },
   })
 
@@ -202,6 +230,56 @@ export function SettingsForm() {
               <option value="FIXED">Fijo (siempre descuenta la duración)</option>
               <option value="REAL_TIME">Tiempo real (descuenta lo que dure)</option>
             </select>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="checkbox" id="lunchRequired" {...register('lunchRequired')} />
+          <Label htmlFor="lunchRequired">Almuerzo obligatorio (jornada sin almuerzo = incidencia)</Label>
+        </div>
+      </section>
+
+      {/* ── Ventanas de marcación ── */}
+      <section className="space-y-4">
+        <h2 className="font-semibold text-base border-b pb-1">Ventanas de marcación</h2>
+        <p className="text-xs text-muted-foreground">
+          Define los rangos horarios en que cada tipo de marcación es válida. El sistema clasifica automáticamente la marcación según la hora del día.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-muted-foreground">Ventana de entrada</Label>
+            <div className="flex gap-2 mt-1">
+              <Input type="time" {...register('entryWindowStart')} className="flex-1" />
+              <span className="self-center text-muted-foreground">—</span>
+              <Input type="time" {...register('entryWindowEnd')} className="flex-1" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Ventana de almuerzo</Label>
+            <div className="flex gap-2 mt-1">
+              <Input type="time" {...register('lunchWindowStart')} className="flex-1" />
+              <span className="self-center text-muted-foreground">—</span>
+              <Input type="time" {...register('lunchWindowEnd')} className="flex-1" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Ventana de salida</Label>
+            <div className="flex gap-2 mt-1">
+              <Input type="time" {...register('exitWindowStart')} className="flex-1" />
+              <span className="self-center text-muted-foreground">—</span>
+              <Input type="time" {...register('exitWindowEnd')} className="flex-1" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="maxMarksPerDay" className="text-xs">Máximo de marcaciones/día</Label>
+              <Input id="maxMarksPerDay" type="number" min={2} max={10} {...register('maxMarksPerDay')} />
+              <p className="text-muted-foreground text-xs mt-1">Más de este número → incidencia automática.</p>
+            </div>
+            <div>
+              <Label htmlFor="lunchSkipHours" className="text-xs">Horas para salto de almuerzo</Label>
+              <Input id="lunchSkipHours" type="number" min={1} max={12} {...register('lunchSkipHours')} />
+              <p className="text-muted-foreground text-xs mt-1">Si pasan estas horas tras la salida a almuerzo, la siguiente marca se toma como SALIDA (Caso B flexible).</p>
+            </div>
           </div>
         </div>
       </section>

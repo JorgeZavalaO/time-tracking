@@ -13,6 +13,16 @@ export type CompanySettings = {
   overtimeRoundMinutes: number
   lunchDurationMinutes: number
   lunchDeductionType: "FIXED" | "REAL_TIME"
+  lunchRequired: boolean
+  // Ventanas de marcación (Sprint 5)
+  entryWindowStart: string
+  entryWindowEnd: string
+  lunchWindowStart: string
+  lunchWindowEnd: string
+  exitWindowStart: string
+  exitWindowEnd: string
+  maxMarksPerDay: number
+  lunchSkipHours: number
 }
 
 export function useSettings() {
