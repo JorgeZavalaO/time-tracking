@@ -17,7 +17,6 @@ function toValidInt(value: string): number | null {
 const putSchema = z.object({
   name: z.string().min(1, "Nombre requerido").transform((v) => v.trim()),
   active: z.boolean().optional(),
-  isBlocked: z.boolean().optional(),
   pin: z.string().regex(/^\d{4,8}$/).optional(),
   scheduleSpecialId: z.number().int().positive().nullable().optional(),
   // RRHH (Sprint 3)
@@ -43,7 +42,7 @@ export async function PUT(req: NextRequest, context) {
       );
     }
 
-    const { name, active, isBlocked, scheduleSpecialId, pin, position, hireDate, salary, paymentType, tags } = putSchema.parse(await req.json());
+    const { name, active, scheduleSpecialId, pin, position, hireDate, salary, paymentType, tags } = putSchema.parse(await req.json());
 
     if (scheduleSpecialId) {
         const exists = await prisma.schedule.findUnique({ where:{ id:scheduleSpecialId } })
@@ -56,7 +55,7 @@ export async function PUT(req: NextRequest, context) {
     // Snapshot before para auditoría
     const before = await prisma.collaborator.findUnique({
       where: { id },
-      select: { name: true, active: true, is_blocked: true, scheduleSpecialId: true },
+      select: { name: true, active: true, scheduleSpecialId: true },
     })
 
     const updated = await prisma.collaborator.update({
@@ -65,7 +64,6 @@ export async function PUT(req: NextRequest, context) {
           name,
           active: active ?? undefined,
           is_active: active ?? undefined,
-          is_blocked: isBlocked ?? undefined,
           pin_hash: pin ? await hash(pin, 10) : undefined,
           scheduleSpecialId: scheduleSpecialId ?? null,
           position: position !== undefined ? position : undefined,
@@ -85,7 +83,7 @@ export async function PUT(req: NextRequest, context) {
       resourceId: id,
       status: AuditStatus.SUCCESS,
       before,
-      after: { name: updated.name, active: updated.active, is_blocked: updated.is_blocked, scheduleSpecialId: updated.scheduleSpecialId },
+      after: { name: updated.name, active: updated.active, scheduleSpecialId: updated.scheduleSpecialId },
     })
 
     return NextResponse.json(updated)

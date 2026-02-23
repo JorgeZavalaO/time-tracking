@@ -92,7 +92,6 @@ model Collaborator {
   name                String
   active              Boolean     @default(true)
   is_active           Boolean     @default(true)
-  is_blocked          Boolean     @default(false)
   pin_hash            String?
   qr_token            String?     @unique
   photo_url           String?

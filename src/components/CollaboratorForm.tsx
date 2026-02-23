@@ -19,13 +19,14 @@ import {
   AlertDialogAction,
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useSchedules } from '@/hooks/useSchedules'
 import { Schedule } from '@/hooks/useCollaborators'
 import { useSaveCollaborator } from '@/hooks/useCollaboratorMutations'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import QRCode from 'qrcode'
@@ -50,7 +51,6 @@ type Props = {
     dni: string
     name: string
     active: boolean
-    isBlocked?: boolean
     hasPin?: boolean
     hasQr?: boolean
     photoUrl?: string | null
@@ -68,7 +68,6 @@ const schema = z.object({
   dni: z.string().regex(/^\d{8}$/, 'DNI debe tener 8 dígitos'),
   name: z.string().min(2, 'Nombre muy corto'),
   active: z.boolean(),
-  isBlocked: z.boolean(),
   pin: z.string().regex(/^$|^\d{4,8}$/, 'PIN debe tener 4 a 8 dígitos'),
   scheduleSpecialId: z.string(),
   // RRHH (Sprint 3)
@@ -98,6 +97,7 @@ export function CollaboratorForm({
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isDirty },
@@ -107,7 +107,6 @@ export function CollaboratorForm({
       dni: '',
       name: '',
       active: true,
-      isBlocked: false,
       pin: '',
       scheduleSpecialId: '',
       position: '',
@@ -132,7 +131,6 @@ export function CollaboratorForm({
         dni: initialData?.dni ?? '',
         name: initialData?.name ?? '',
         active: initialData?.active ?? true,
-        isBlocked: initialData?.isBlocked ?? false,
         pin: '',
         scheduleSpecialId: initialData?.schedule?.id
           ? String(initialData.schedule.id)
@@ -165,7 +163,6 @@ export function CollaboratorForm({
       dni: data.dni,
       name: data.name.trim(),
       active: data.active,
-      isBlocked: data.isBlocked,
       pin: data.pin || undefined,
       scheduleSpecialId:
         data.scheduleSpecialId === '' ? null : Number(data.scheduleSpecialId),
@@ -282,15 +279,18 @@ export function CollaboratorForm({
             </div>
 
             {/* Activo */}
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="active" {...register('active')} />
-              <Label htmlFor="active">Activo</Label>
-            </div>
-
-            {/* Bloqueado */}
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="isBlocked" {...register('isBlocked')} />
-              <Label htmlFor="isBlocked">Bloqueado</Label>
+            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+              <div>
+                <Label htmlFor="active" className="text-sm font-medium cursor-pointer">Activo</Label>
+                <p className="text-xs text-muted-foreground">El colaborador puede marcar asistencia.</p>
+              </div>
+              <Controller
+                control={control}
+                name="active"
+                render={({ field }) => (
+                  <Switch id="active" checked={field.value} onCheckedChange={field.onChange} />
+                )}
+              />
             </div>
 
             {/* PIN */}

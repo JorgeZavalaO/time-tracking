@@ -12,7 +12,6 @@ export function useSaveCollaborator(
       payload: Partial<Collaborator> & {
         scheduleSpecialId?: number | null
         pin?: string
-        isBlocked?: boolean
         position?: string | null
         hireDate?: string | null
         salary?: number | null

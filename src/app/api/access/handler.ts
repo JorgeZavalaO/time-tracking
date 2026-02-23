@@ -168,16 +168,16 @@ export default async function handler(req: NextRequest) {
     return NextResponse.json({ message: "Colaborador no encontrado" }, { status: 404 });
   }
 
-  if (!collaborator.active || !collaborator.is_active || collaborator.is_blocked) {
+  if (!collaborator.active || !collaborator.is_active) {
     await logAudit({
       action: "ACCESS_DENIED",
       resource: "ACCESS",
       resourceId: collaborator.id,
       status: AuditStatus.DENIED,
-      error: collaborator.is_blocked ? "Colaborador bloqueado" : "Colaborador inactivo",
+      error: "Colaborador inactivo",
       metadata: { collaboratorId: collaborator.id, method: payload.method },
     });
-    return NextResponse.json({ message: "Colaborador inactivo o bloqueado" }, { status: 403 });
+    return NextResponse.json({ message: "Colaborador inactivo" }, { status: 403 });
   }
 
   if (!collaborator.pin_hash) {

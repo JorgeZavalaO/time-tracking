@@ -5,7 +5,7 @@ export type Schedule = {
     type: 'GENERAL' | 'SPECIAL'
     startTime: string
     endTime?: string | null
-    days: string
+    days: string | string[]
   }
 
 export type Collaborator = {
@@ -13,7 +13,6 @@ export type Collaborator = {
   dni: string
   name: string
   active: boolean
-  isBlocked?: boolean
   hasPin?: boolean
   hasQr?: boolean
   photoUrl?: string | null

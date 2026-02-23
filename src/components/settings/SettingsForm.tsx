@@ -1,13 +1,17 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { useSettings, useUpdateSettings, CompanySettings } from '@/hooks/useSettings'
 
 const schema = z.object({
@@ -18,14 +22,12 @@ const schema = z.object({
   lateDiscountPolicy:    z.enum(['BY_MINUTE', 'BY_RANGE']),
   overtimeEnabled:       z.boolean(),
   overtimeBeforeMinutes: z.coerce.number().int().min(0).max(120),
-  overtimeAfterMinutes:  z.coerce.number().int().min(0).max(480),
-  overtimeRoundMinutes:  z.coerce.number().int().min(1).max(60),
-  overtimeFactor:        z.coerce.number().min(1).max(5),
+  /** % extra sobre la tarifa. 0 = sin recargo (×1.0), 50 = ×1.5, 100 = ×2.0 */
+  overtimeFactorPct:     z.coerce.number().min(0).max(900),
   workdayHours:          z.coerce.number().int().min(1).max(24),
   lunchDurationMinutes:  z.coerce.number().int().min(0).max(180),
   lunchDeductionType:    z.enum(['FIXED', 'REAL_TIME']),
   lunchRequired:         z.boolean(),
-  // Ventanas de marcación (Sprint 5)
   entryWindowStart:      z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
   entryWindowEnd:        z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
   lunchWindowStart:      z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:mm'),
@@ -47,9 +49,8 @@ function toForm(s: CompanySettings): FormData {
     lateDiscountPolicy:    s.lateDiscountPolicy,
     overtimeEnabled:       s.overtimeEnabled,
     overtimeBeforeMinutes: s.overtimeBeforeMinutes,
-    overtimeAfterMinutes:  s.overtimeAfterMinutes,
-    overtimeRoundMinutes:  s.overtimeRoundMinutes,
-    overtimeFactor:        s.overtimeFactor,
+    // Convertir decimal → % de recargo (1.5 → 50, 1.0 → 0, 2.0 → 100)
+    overtimeFactorPct:     parseFloat(((Number(s.overtimeFactor) - 1) * 100).toFixed(2)),
     workdayHours:          s.workdayHours,
     lunchDurationMinutes:  s.lunchDurationMinutes,
     lunchDeductionType:    s.lunchDeductionType,
@@ -65,6 +66,15 @@ function toForm(s: CompanySettings): FormData {
   }
 }
 
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-muted-foreground mt-1">{children}</p>
+}
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null
+  return <p className="text-xs text-destructive mt-1">{msg}</p>
+}
+
 export function SettingsForm() {
   const { data: settings, isLoading } = useSettings()
   const updateMutation = useUpdateSettings()
@@ -74,6 +84,7 @@ export function SettingsForm() {
     handleSubmit,
     reset,
     watch,
+    control,
     formState: { errors, isDirty, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -85,9 +96,7 @@ export function SettingsForm() {
       lateDiscountPolicy: 'BY_MINUTE',
       overtimeEnabled: false,
       overtimeBeforeMinutes: 0,
-      overtimeAfterMinutes: 0,
-      overtimeRoundMinutes: 15,
-      overtimeFactor: 1.5,
+      overtimeFactorPct: 50,   // 50 % extra = factor 1.5
       workdayHours: 8,
       lunchDurationMinutes: 60,
       lunchDeductionType: 'FIXED',
@@ -114,203 +123,272 @@ export function SettingsForm() {
       await updateMutation.mutateAsync({
         ...data,
         ruc: data.ruc || null,
-      })
+        // Convertir % extra → factor decimal (50 → 1.5, 0 → 1.0, 100 → 2.0)
+        overtimeFactor:       parseFloat((1 + data.overtimeFactorPct / 100).toFixed(4)),
+        // Valores fijos: sin redondeo efectivo, sin umbral post-turno
+        overtimeRoundMinutes: 1,
+        overtimeAfterMinutes: 0,
+      } as Parameters<typeof updateMutation.mutateAsync>[0])
       toast.success('Configuración guardada')
-      reset(data) // resetea dirty
+      reset(data)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al guardar')
     }
   })
 
   if (isLoading) {
-    return <p className="text-muted-foreground text-sm">Cargando configuración…</p>
+    return <p className="text-muted-foreground text-sm py-4">Cargando configuración…</p>
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8 max-w-2xl">
+    <form onSubmit={onSubmit} className="space-y-5">
 
       {/* ── Empresa ── */}
-      <section className="space-y-4">
-        <h2 className="font-semibold text-base border-b pb-1">Datos de empresa</h2>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="companyName">Razón social</Label>
-            <Input id="companyName" {...register('companyName')} />
-            {errors.companyName && (
-              <p className="text-destructive text-xs mt-1">{errors.companyName.message}</p>
-            )}
+      <Card className="shadow-none border">
+        <CardHeader className="pb-3 pt-4 px-5">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            Empresa
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2">
+              <Label htmlFor="companyName" className="text-xs">Razón social</Label>
+              <Input id="companyName" className="mt-1" {...register('companyName')} />
+              <FieldError msg={errors.companyName?.message} />
+            </div>
+            <div>
+              <Label htmlFor="ruc" className="text-xs">RUC <span className="text-muted-foreground">(opcional)</span></Label>
+              <Input id="ruc" className="mt-1" {...register('ruc')} placeholder="20XXXXXXXXX" />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="ruc">RUC (opcional)</Label>
-            <Input id="ruc" {...register('ruc')} placeholder="20XXXXXXXXX" />
+          <div className="w-64">
+            <Label htmlFor="timezone" className="text-xs">Zona horaria</Label>
+            <Input id="timezone" className="mt-1 font-mono text-sm" {...register('timezone')} />
+            <FieldHint>UTC−5 · Lima, Perú. Modifica solo si el servidor opera en otra zona horaria.</FieldHint>
+            <FieldError msg={errors.timezone?.message} />
           </div>
-        </div>
-
-        <div className="w-48">
-          <Label htmlFor="timezone">Zona horaria</Label>
-          <Input id="timezone" {...register('timezone')} placeholder="America/Lima" />
-          {errors.timezone && (
-            <p className="text-destructive text-xs mt-1">{errors.timezone.message}</p>
-          )}
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* ── Tardanza ── */}
-      <section className="space-y-4">
-        <h2 className="font-semibold text-base border-b pb-1">Política de tardanza</h2>
-
-        <div className="grid grid-cols-2 gap-4">
+      <Card className="shadow-none border">
+        <CardHeader className="pb-3 pt-4 px-5">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            Tardanza
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="lateTolerance">Tolerancia (minutos)</Label>
+            <Label htmlFor="lateTolerance" className="text-xs">Tolerancia (minutos)</Label>
             <Input
               id="lateTolerance"
               type="number"
               min={0}
               max={120}
+              className="mt-1"
               {...register('lateTolerance')}
             />
-            <p className="text-muted-foreground text-xs mt-1">
-              Minutos de gracia antes de marcar como tarde.
-            </p>
-            {errors.lateTolerance && (
-              <p className="text-destructive text-xs mt-1">{errors.lateTolerance.message}</p>
-            )}
+            <FieldHint>Minutos de gracia antes de marcar como tarde.</FieldHint>
+            <FieldError msg={errors.lateTolerance?.message} />
           </div>
           <div>
-            <Label htmlFor="lateDiscountPolicy">Política de descuento</Label>
-            <select
-              id="lateDiscountPolicy"
-              className="border rounded-md px-2 py-2 w-full text-sm"
-              {...register('lateDiscountPolicy')}
-            >
-              <option value="BY_MINUTE">Por minuto</option>
-              <option value="BY_RANGE">Por rangos</option>
-            </select>
+            <Label htmlFor="lateDiscountPolicy" className="text-xs">Política de descuento</Label>
+            <Controller
+              control={control}
+              name="lateDiscountPolicy"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="lateDiscountPolicy" className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BY_MINUTE">Por minuto</SelectItem>
+                    <SelectItem value="BY_RANGE">Por rangos</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* ── Horas extra ── */}
-      <section className="space-y-4">
-        <h2 className="font-semibold text-base border-b pb-1">Horas extra</h2>
-
-        <div className="flex items-center gap-2">
-          <input type="checkbox" id="overtimeEnabled" {...register('overtimeEnabled')} />
-          <Label htmlFor="overtimeEnabled">Habilitar cálculo de horas extra</Label>
-        </div>
-
-        {overtimeEnabled && (
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="overtimeBeforeMinutes">Minutos antes del turno</Label>
-              <Input id="overtimeBeforeMinutes" type="number" min={0} max={120} {...register('overtimeBeforeMinutes')} />
-            </div>
-            <div>
-              <Label htmlFor="overtimeAfterMinutes">Minutos después del turno</Label>
-              <Input id="overtimeAfterMinutes" type="number" min={0} max={480} {...register('overtimeAfterMinutes')} />
-            </div>
-            <div>
-              <Label htmlFor="overtimeRoundMinutes">Redondeo (minutos)</Label>
-              <Input id="overtimeRoundMinutes" type="number" min={1} max={60} {...register('overtimeRoundMinutes')} />
-            </div>
-            <div>
-              <Label htmlFor="overtimeFactor">Factor multiplicador (ej. 1.5)</Label>
-              <Input id="overtimeFactor" type="number" min={1} max={5} step={0.25} {...register('overtimeFactor')} />
-              <p className="text-muted-foreground text-xs mt-1">Pagado × factor sobre la tarifa/hora normal.</p>
-            </div>
-            <div>
-              <Label htmlFor="workdayHours">Horas de jornada estándar</Label>
-              <Input id="workdayHours" type="number" min={1} max={24} {...register('workdayHours')} />
-              <p className="text-muted-foreground text-xs mt-1">Usado para calcular la tarifa/hora del colaborador.</p>
+      <Card className="shadow-none border">
+        <CardHeader className="pb-3 pt-4 px-5">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Horas extra
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="overtimeEnabled" className="text-xs font-normal cursor-pointer">
+                {overtimeEnabled ? 'Habilitado' : 'Deshabilitado'}
+              </Label>
+              <Controller
+                control={control}
+                name="overtimeEnabled"
+                render={({ field }) => (
+                  <Switch
+                    id="overtimeEnabled"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
             </div>
           </div>
+        </CardHeader>
+        {overtimeEnabled && (
+          <CardContent className="px-5 pb-5">
+            <Separator className="mb-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="overtimeBeforeMinutes" className="text-xs">Umbral antes del turno (min)</Label>
+                <Input id="overtimeBeforeMinutes" type="number" min={0} max={120} className="mt-1" {...register('overtimeBeforeMinutes')} />
+                <FieldHint>Minutos de margen antes de que cuente como H.E.</FieldHint>
+              </div>
+              <div>
+                <Label htmlFor="overtimeFactorPct" className="text-xs">Recargo de horas extra</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="overtimeFactorPct"
+                    type="number"
+                    min={0}
+                    max={900}
+                    step={0.1}
+                    className="pr-8"
+                    {...register('overtimeFactorPct')}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                </div>
+                <FieldHint>% extra sobre la tarifa normal. 0 = sin recargo · 50 = paga ×1.5 · 100 = paga ×2.0</FieldHint>
+                <FieldError msg={errors.overtimeFactorPct?.message} />
+              </div>
+              <div>
+                <Label htmlFor="workdayHours" className="text-xs">Horas de jornada estándar</Label>
+                <Input id="workdayHours" type="number" min={1} max={24} className="mt-1" {...register('workdayHours')} />
+                <FieldHint>Se usa para calcular la tarifa/hora.</FieldHint>
+              </div>
+            </div>
+          </CardContent>
         )}
-      </section>
+      </Card>
 
       {/* ── Almuerzo ── */}
-      <section className="space-y-4">
-        <h2 className="font-semibold text-base border-b pb-1">Regla de almuerzo</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="lunchDurationMinutes">Duración esperada (minutos)</Label>
-            <Input id="lunchDurationMinutes" type="number" min={0} max={180} {...register('lunchDurationMinutes')} />
+      <Card className="shadow-none border">
+        <CardHeader className="pb-3 pt-4 px-5">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            Almuerzo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="lunchDurationMinutes" className="text-xs">Duración esperada (minutos)</Label>
+              <Input id="lunchDurationMinutes" type="number" min={0} max={180} className="mt-1" {...register('lunchDurationMinutes')} />
+            </div>
+            <div>
+              <Label htmlFor="lunchDeductionType" className="text-xs">Tipo de descuento</Label>
+              <Controller
+                control={control}
+                name="lunchDeductionType"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="lunchDeductionType" className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FIXED">Fijo (siempre descuenta la duración)</SelectItem>
+                      <SelectItem value="REAL_TIME">Tiempo real (descuenta lo que dure)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="lunchDeductionType">Tipo de descuento</Label>
-            <select
-              id="lunchDeductionType"
-              className="border rounded-md px-2 py-2 w-full text-sm"
-              {...register('lunchDeductionType')}
-            >
-              <option value="FIXED">Fijo (siempre descuenta la duración)</option>
-              <option value="REAL_TIME">Tiempo real (descuenta lo que dure)</option>
-            </select>
+          <div className="flex items-center gap-3">
+            <Controller
+              control={control}
+              name="lunchRequired"
+              render={({ field }) => (
+                <Switch
+                  id="lunchRequired"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <Label htmlFor="lunchRequired" className="text-sm font-normal cursor-pointer">
+              Almuerzo obligatorio
+              <span className="block text-xs text-muted-foreground">
+                Jornada sin almuerzo genera incidencia automática.
+              </span>
+            </Label>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <input type="checkbox" id="lunchRequired" {...register('lunchRequired')} />
-          <Label htmlFor="lunchRequired">Almuerzo obligatorio (jornada sin almuerzo = incidencia)</Label>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* ── Ventanas de marcación ── */}
-      <section className="space-y-4">
-        <h2 className="font-semibold text-base border-b pb-1">Ventanas de marcación</h2>
-        <p className="text-xs text-muted-foreground">
-          Define los rangos horarios en que cada tipo de marcación es válida. El sistema clasifica automáticamente la marcación según la hora del día.
-        </p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="text-xs text-muted-foreground">Ventana de entrada</Label>
-            <div className="flex gap-2 mt-1">
-              <Input type="time" {...register('entryWindowStart')} className="flex-1" />
-              <span className="self-center text-muted-foreground">—</span>
-              <Input type="time" {...register('entryWindowEnd')} className="flex-1" />
-            </div>
+      <Card className="shadow-none border">
+        <CardHeader className="pb-3 pt-4 px-5">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+            Ventanas de marcación
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Rangos horarios en que cada tipo de marcación es válida. El sistema clasifica
+            automáticamente según la hora del día.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {(
+              [
+                { label: 'Entrada', start: 'entryWindowStart', end: 'entryWindowEnd' },
+                { label: 'Almuerzo', start: 'lunchWindowStart', end: 'lunchWindowEnd' },
+                { label: 'Salida', start: 'exitWindowStart', end: 'exitWindowEnd' },
+              ] as const
+            ).map(({ label, start, end }) => (
+              <div key={label}>
+                <Label className="text-xs">{label}</Label>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Input type="time" {...register(start)} className="flex-1" />
+                  <span className="text-muted-foreground text-xs">—</span>
+                  <Input type="time" {...register(end)} className="flex-1" />
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Ventana de almuerzo</Label>
-            <div className="flex gap-2 mt-1">
-              <Input type="time" {...register('lunchWindowStart')} className="flex-1" />
-              <span className="self-center text-muted-foreground">—</span>
-              <Input type="time" {...register('lunchWindowEnd')} className="flex-1" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Ventana de salida</Label>
-            <div className="flex gap-2 mt-1">
-              <Input type="time" {...register('exitWindowStart')} className="flex-1" />
-              <span className="self-center text-muted-foreground">—</span>
-              <Input type="time" {...register('exitWindowEnd')} className="flex-1" />
-            </div>
-          </div>
-          <div className="space-y-3">
+          <Separator />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="maxMarksPerDay" className="text-xs">Máximo de marcaciones/día</Label>
-              <Input id="maxMarksPerDay" type="number" min={2} max={10} {...register('maxMarksPerDay')} />
-              <p className="text-muted-foreground text-xs mt-1">Más de este número → incidencia automática.</p>
+              <Label htmlFor="maxMarksPerDay" className="text-xs">Máx. marcaciones/día</Label>
+              <Input id="maxMarksPerDay" type="number" min={2} max={10} className="mt-1" {...register('maxMarksPerDay')} />
+              <FieldHint>Más de este número genera incidencia automática.</FieldHint>
             </div>
             <div>
               <Label htmlFor="lunchSkipHours" className="text-xs">Horas para salto de almuerzo</Label>
-              <Input id="lunchSkipHours" type="number" min={1} max={12} {...register('lunchSkipHours')} />
-              <p className="text-muted-foreground text-xs mt-1">Si pasan estas horas tras la salida a almuerzo, la siguiente marca se toma como SALIDA (Caso B flexible).</p>
+              <Input id="lunchSkipHours" type="number" min={1} max={12} className="mt-1" {...register('lunchSkipHours')} />
+              <FieldHint>
+                Si pasan estas horas tras la salida a almuerzo, la siguiente marca se toma como SALIDA.
+              </FieldHint>
             </div>
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
-      <div className="flex gap-3">
-        <Button type="submit" disabled={!isDirty || isSubmitting}>
-          {isSubmitting ? 'Guardando…' : 'Guardar configuración'}
+      {/* ── Acciones ── */}
+      <div className="flex gap-2 pt-1">
+        <Button type="submit" size="sm" disabled={!isDirty || isSubmitting}>
+          {isSubmitting ? 'Guardando…' : 'Guardar cambios'}
         </Button>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          size="sm"
           disabled={!isDirty}
           onClick={() => settings && reset(toForm(settings))}
         >
-          Descartar cambios
+          Descartar
         </Button>
       </div>
     </form>
